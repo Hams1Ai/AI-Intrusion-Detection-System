@@ -141,6 +141,8 @@ export class DatabaseStorage implements IStorage {
   private currentSessionId: number | null = null;
   private currentDifficulty: Difficulty = "normal";
   private currentFlow: FlowData | null = null;
+  private flowCache: Map<number, FlowData> = new Map();
+  private static readonly MAX_CACHED_FLOWS = 50;
 
   private async ensureSession(): Promise<number> {
     if (this.currentSessionId === null) {
@@ -156,41 +158,53 @@ export class DatabaseStorage implements IStorage {
   async getNextFlow(): Promise<FlowData> {
     const mlFlow = getFlowFromMLPython();
     this.currentFlow = mlFlow ?? generateSimulatedFlow();
+    
+    // Cache the flow by ID for later lookup during submission
+    this.flowCache.set(this.currentFlow.flow_id, this.currentFlow);
+    
+    // Clean up old cached flows to prevent memory leaks
+    if (this.flowCache.size > DatabaseStorage.MAX_CACHED_FLOWS) {
+      const keysToDelete = Array.from(this.flowCache.keys()).slice(0, 10);
+      keysToDelete.forEach(key => this.flowCache.delete(key));
+    }
+    
     return this.currentFlow;
   }
 
   async submitDecision(flowId: number, userAction: number): Promise<DecisionResult> {
-    if (!this.currentFlow) {
-      throw new Error("No flow loaded - call getNextFlow first");
-    }
-
-    if (this.currentFlow.flow_id !== flowId) {
-      throw new Error("Flow ID mismatch - the submitted flow does not match the current flow");
+    // Look up the flow from cache by ID - this allows handling timing issues
+    const flow = this.flowCache.get(flowId);
+    
+    if (!flow) {
+      throw new Error("Flow not found - the flow may have expired or was never loaded");
     }
 
     const sessionId = await this.ensureSession();
-    const trueLabel = this.currentFlow.true_label;
+    const trueLabel = flow.true_label;
     const reward = calculateReward(userAction, trueLabel, this.currentDifficulty);
     const isCorrect = reward > 0 ? 1 : 0;
 
     await db.insert(decisions).values({
       sessionId,
-      flowId: this.currentFlow.flow_id,
-      riskScore: this.currentFlow.risk_score,
-      xgbLabel: this.currentFlow.xgb_label,
-      rlAction: this.currentFlow.rl_action,
-      trueLabel: this.currentFlow.true_label,
+      flowId: flow.flow_id,
+      riskScore: flow.risk_score,
+      xgbLabel: flow.xgb_label,
+      rlAction: flow.rl_action,
+      trueLabel: flow.true_label,
       userAction,
       reward,
       isCorrect,
-      srcIp: this.currentFlow.src_ip,
-      dstIp: this.currentFlow.dst_ip,
-      srcPort: this.currentFlow.src_port,
-      dstPort: this.currentFlow.dst_port,
-      protocol: this.currentFlow.protocol,
-      packetSize: this.currentFlow.packet_size,
-      duration: this.currentFlow.duration,
+      srcIp: flow.src_ip,
+      dstIp: flow.dst_ip,
+      srcPort: flow.src_port,
+      dstPort: flow.dst_port,
+      protocol: flow.protocol,
+      packetSize: flow.packet_size,
+      duration: flow.duration,
     });
+
+    // Remove the flow from cache after submission to prevent replay
+    this.flowCache.delete(flowId);
 
     const [session] = await db
       .select()
@@ -212,8 +226,6 @@ export class DatabaseStorage implements IStorage {
         updatedAt: new Date(),
       })
       .where(eq(gameSessions.id, sessionId));
-
-    this.currentFlow = null;
 
     return {
       reward,
@@ -260,6 +272,7 @@ export class DatabaseStorage implements IStorage {
     this.currentSessionId = null;
     this.currentFlow = null;
     this.currentDifficulty = "normal";
+    this.flowCache.clear();
   }
 
   async getDecisionHistory(): Promise<Decision[]> {
