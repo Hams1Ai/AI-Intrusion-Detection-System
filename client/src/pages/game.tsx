@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -27,8 +27,30 @@ import {
   Package,
   Wifi,
   AlertOctagon,
-  Info
+  Info,
+  BarChart3,
+  PieChart,
+  TrendingDown,
+  ShieldAlert,
+  ShieldCheck,
+  ChevronDown,
+  ChevronUp
 } from "lucide-react";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  Cell,
+  Legend,
+  ReferenceLine
+} from "recharts";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
@@ -745,6 +767,366 @@ function DecisionHistory({ decisions, isLoading }: DecisionHistoryProps) {
   );
 }
 
+interface AnalyticsDashboardProps {
+  decisions: Decision[];
+}
+
+function AnalyticsDashboard({ decisions }: AnalyticsDashboardProps) {
+  const [isOpen, setIsOpen] = useState(true);
+
+  const analytics = useMemo(() => {
+    if (decisions.length === 0) {
+      return {
+        timelineData: [],
+        accuracyTrendData: [],
+        patternData: {
+          truePositives: 0,
+          trueNegatives: 0,
+          falsePositives: 0,
+          falseNegatives: 0,
+          totalBlocks: 0,
+          totalIgnores: 0,
+          blockRate: 0,
+          falsePositiveRate: 0,
+          falseNegativeRate: 0,
+          precision: 0,
+          recall: 0,
+        },
+        rewardTrendData: [],
+      };
+    }
+
+    const sortedDecisions = [...decisions].reverse();
+
+    let cumulativeCorrect = 0;
+    let cumulativeScore = 0;
+    const timelineData = sortedDecisions.map((d, i) => {
+      cumulativeCorrect += d.isCorrect;
+      cumulativeScore += d.reward;
+      return {
+        decision: i + 1,
+        correct: d.isCorrect,
+        reward: d.reward,
+        cumulativeScore,
+        riskScore: Math.round(d.riskScore * 100),
+        userAction: d.userAction === 1 ? "Block" : "Ignore",
+        trueLabel: d.trueLabel === 1 ? "Attack" : "Normal",
+      };
+    });
+
+    const accuracyTrendData = sortedDecisions.map((_, i) => {
+      const subset = sortedDecisions.slice(0, i + 1);
+      const correctCount = subset.filter(d => d.isCorrect).length;
+      return {
+        decision: i + 1,
+        accuracy: Math.round((correctCount / (i + 1)) * 100),
+      };
+    });
+
+    let truePositives = 0;
+    let trueNegatives = 0;
+    let falsePositives = 0;
+    let falseNegatives = 0;
+
+    sortedDecisions.forEach(d => {
+      if (d.userAction === 1 && d.trueLabel === 1) truePositives++;
+      else if (d.userAction === 0 && d.trueLabel === 0) trueNegatives++;
+      else if (d.userAction === 1 && d.trueLabel === 0) falsePositives++;
+      else if (d.userAction === 0 && d.trueLabel === 1) falseNegatives++;
+    });
+
+    const totalBlocks = truePositives + falsePositives;
+    const totalIgnores = trueNegatives + falseNegatives;
+    const totalAttacks = truePositives + falseNegatives;
+    const totalNormal = trueNegatives + falsePositives;
+
+    const blockRate = decisions.length > 0 ? (totalBlocks / decisions.length) * 100 : 0;
+    const falsePositiveRate = totalNormal > 0 ? (falsePositives / totalNormal) * 100 : 0;
+    const falseNegativeRate = totalAttacks > 0 ? (falseNegatives / totalAttacks) * 100 : 0;
+    const precision = totalBlocks > 0 ? (truePositives / totalBlocks) * 100 : 0;
+    const recall = totalAttacks > 0 ? (truePositives / totalAttacks) * 100 : 0;
+
+    const patternData = {
+      truePositives,
+      trueNegatives,
+      falsePositives,
+      falseNegatives,
+      totalBlocks,
+      totalIgnores,
+      blockRate,
+      falsePositiveRate,
+      falseNegativeRate,
+      precision,
+      recall,
+    };
+
+    const windowSize = 5;
+    const rewardTrendData = sortedDecisions.map((_, i) => {
+      const start = Math.max(0, i - windowSize + 1);
+      const window = sortedDecisions.slice(start, i + 1);
+      const avgReward = window.reduce((sum, d) => sum + d.reward, 0) / window.length;
+      return {
+        decision: i + 1,
+        avgReward: Math.round(avgReward * 10) / 10,
+      };
+    });
+
+    return { timelineData, accuracyTrendData, patternData, rewardTrendData };
+  }, [decisions]);
+
+  if (decisions.length === 0) {
+    return null;
+  }
+
+  const confusionMatrixData = [
+    { name: "Correct Blocks", value: analytics.patternData.truePositives, color: "hsl(var(--neon-green))" },
+    { name: "Correct Ignores", value: analytics.patternData.trueNegatives, color: "hsl(var(--neon-cyan))" },
+    { name: "False Blocks", value: analytics.patternData.falsePositives, color: "hsl(var(--neon-yellow))" },
+    { name: "Missed Attacks", value: analytics.patternData.falseNegatives, color: "hsl(var(--neon-red))" },
+  ];
+
+  return (
+    <Collapsible open={isOpen} onOpenChange={setIsOpen}>
+      <Card className="neon-border-gradient neon-glow-purple">
+        <CardHeader className="pb-2">
+          <CollapsibleTrigger asChild>
+            <button className="flex items-center justify-between gap-2 w-full text-left" data-testid="button-toggle-analytics">
+              <CardTitle className="flex items-center gap-2 text-lg uppercase tracking-wide">
+                <BarChart3 className="w-5 h-5 text-neon-purple" />
+                Analytics Dashboard
+                <Badge variant="secondary" className="ml-2">{decisions.length} decisions</Badge>
+              </CardTitle>
+              {isOpen ? (
+                <ChevronUp className="w-5 h-5 text-muted-foreground" />
+              ) : (
+                <ChevronDown className="w-5 h-5 text-muted-foreground" />
+              )}
+            </button>
+          </CollapsibleTrigger>
+        </CardHeader>
+        <CollapsibleContent>
+          <CardContent className="space-y-6">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="p-3 rounded-md bg-neon-green/10 border border-neon-green/30 text-center">
+                <ShieldCheck className="w-5 h-5 mx-auto mb-1 text-neon-green" />
+                <p className="text-xs text-muted-foreground uppercase">Precision</p>
+                <p className="text-xl font-bold neon-text-green" data-testid="text-precision">
+                  {analytics.patternData.precision.toFixed(0)}%
+                </p>
+              </div>
+              <div className="p-3 rounded-md bg-neon-cyan/10 border border-neon-cyan/30 text-center">
+                <Target className="w-5 h-5 mx-auto mb-1 text-neon-cyan" />
+                <p className="text-xs text-muted-foreground uppercase">Recall</p>
+                <p className="text-xl font-bold neon-text-cyan" data-testid="text-recall">
+                  {analytics.patternData.recall.toFixed(0)}%
+                </p>
+              </div>
+              <div className="p-3 rounded-md bg-neon-yellow/10 border border-neon-yellow/30 text-center">
+                <ShieldAlert className="w-5 h-5 mx-auto mb-1 text-neon-yellow" />
+                <p className="text-xs text-muted-foreground uppercase">False Positive</p>
+                <p className="text-xl font-bold neon-text-yellow" data-testid="text-false-positive">
+                  {analytics.patternData.falsePositiveRate.toFixed(0)}%
+                </p>
+              </div>
+              <div className="p-3 rounded-md bg-neon-red/10 border border-neon-red/30 text-center">
+                <TrendingDown className="w-5 h-5 mx-auto mb-1 text-neon-red" />
+                <p className="text-xs text-muted-foreground uppercase">Miss Rate</p>
+                <p className="text-xl font-bold neon-text-red" data-testid="text-miss-rate">
+                  {analytics.patternData.falseNegativeRate.toFixed(0)}%
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <h3 className="text-sm font-medium uppercase tracking-wide flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-neon-cyan" />
+                Accuracy Trend (Learning Curve)
+              </h3>
+              <div className="h-48 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={analytics.accuracyTrendData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} />
+                    <XAxis 
+                      dataKey="decision" 
+                      stroke="hsl(var(--muted-foreground))"
+                      fontSize={10}
+                      tickLine={false}
+                    />
+                    <YAxis 
+                      stroke="hsl(var(--muted-foreground))"
+                      fontSize={10}
+                      tickLine={false}
+                      domain={[0, 100]}
+                      tickFormatter={(value) => `${value}%`}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "hsl(var(--card))",
+                        border: "1px solid hsl(var(--border))",
+                        borderRadius: "6px",
+                        fontSize: "12px",
+                      }}
+                      formatter={(value: number) => [`${value}%`, "Accuracy"]}
+                      labelFormatter={(label) => `Decision #${label}`}
+                    />
+                    <ReferenceLine y={50} stroke="hsl(var(--muted-foreground))" strokeDasharray="5 5" opacity={0.5} />
+                    <Line 
+                      type="monotone" 
+                      dataKey="accuracy" 
+                      stroke="hsl(var(--neon-cyan))"
+                      strokeWidth={2}
+                      dot={false}
+                      activeDot={{ r: 4, fill: "hsl(var(--neon-cyan))" }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <h3 className="text-sm font-medium uppercase tracking-wide flex items-center gap-2">
+                <Activity className="w-4 h-4 text-neon-purple" />
+                Score Momentum (5-Decision Average)
+              </h3>
+              <div className="h-48 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={analytics.rewardTrendData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} />
+                    <XAxis 
+                      dataKey="decision" 
+                      stroke="hsl(var(--muted-foreground))"
+                      fontSize={10}
+                      tickLine={false}
+                    />
+                    <YAxis 
+                      stroke="hsl(var(--muted-foreground))"
+                      fontSize={10}
+                      tickLine={false}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "hsl(var(--card))",
+                        border: "1px solid hsl(var(--border))",
+                        borderRadius: "6px",
+                        fontSize: "12px",
+                      }}
+                      formatter={(value: number) => [value, "Avg Reward"]}
+                      labelFormatter={(label) => `Decision #${label}`}
+                    />
+                    <ReferenceLine y={0} stroke="hsl(var(--muted-foreground))" strokeDasharray="5 5" />
+                    <Line 
+                      type="monotone" 
+                      dataKey="avgReward" 
+                      stroke="hsl(var(--neon-purple))"
+                      strokeWidth={2}
+                      dot={false}
+                      activeDot={{ r: 4, fill: "hsl(var(--neon-purple))" }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <h3 className="text-sm font-medium uppercase tracking-wide flex items-center gap-2">
+                <PieChart className="w-4 h-4 text-neon-yellow" />
+                Decision Pattern Breakdown
+              </h3>
+              <div className="h-48 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={confusionMatrixData} layout="vertical">
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} horizontal={false} />
+                    <XAxis type="number" stroke="hsl(var(--muted-foreground))" fontSize={10} />
+                    <YAxis 
+                      type="category" 
+                      dataKey="name" 
+                      stroke="hsl(var(--muted-foreground))" 
+                      fontSize={10}
+                      width={100}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "hsl(var(--card))",
+                        border: "1px solid hsl(var(--border))",
+                        borderRadius: "6px",
+                        fontSize: "12px",
+                      }}
+                    />
+                    <Bar dataKey="value" radius={[0, 4, 4, 0]}>
+                      {confusionMatrixData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-md bg-secondary/20 border border-border/30 space-y-3">
+              <h3 className="text-sm font-medium uppercase tracking-wide">Decision Tendency Analysis</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Block Rate</span>
+                    <span className="font-medium" data-testid="text-block-rate">
+                      {analytics.patternData.blockRate.toFixed(0)}%
+                    </span>
+                  </div>
+                  <Progress 
+                    value={analytics.patternData.blockRate} 
+                    className="h-2 [&>div]:bg-neon-red"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    {analytics.patternData.blockRate > 60 
+                      ? "Tendency to over-block" 
+                      : analytics.patternData.blockRate < 40 
+                        ? "Tendency to under-block" 
+                        : "Balanced approach"}
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Ignore Rate</span>
+                    <span className="font-medium" data-testid="text-ignore-rate">
+                      {(100 - analytics.patternData.blockRate).toFixed(0)}%
+                    </span>
+                  </div>
+                  <Progress 
+                    value={100 - analytics.patternData.blockRate} 
+                    className="h-2 [&>div]:bg-neon-cyan"
+                  />
+                </div>
+              </div>
+              <div className="pt-3 border-t border-border/30 grid grid-cols-2 gap-4 text-sm">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-neon-green" />
+                  <span className="text-muted-foreground">Correct Blocks:</span>
+                  <span className="font-medium" data-testid="text-true-positives">{analytics.patternData.truePositives}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-neon-cyan" />
+                  <span className="text-muted-foreground">Correct Ignores:</span>
+                  <span className="font-medium" data-testid="text-true-negatives">{analytics.patternData.trueNegatives}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-neon-yellow" />
+                  <span className="text-muted-foreground">False Blocks:</span>
+                  <span className="font-medium" data-testid="text-false-positives">{analytics.patternData.falsePositives}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-neon-red" />
+                  <span className="text-muted-foreground">Missed Attacks:</span>
+                  <span className="font-medium" data-testid="text-false-negatives">{analytics.patternData.falseNegatives}</span>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </CollapsibleContent>
+      </Card>
+    </Collapsible>
+  );
+}
+
 interface LeaderboardProps {
   entries: LeaderboardEntry[];
   isLoading: boolean;
@@ -1213,6 +1595,8 @@ export default function GamePage() {
           <SessionStats stats={stats} />
           <DecisionHistory decisions={decisionHistory} isLoading={isLoadingHistory} />
         </div>
+        
+        <AnalyticsDashboard decisions={decisionHistory} />
         
         <Leaderboard
           entries={leaderboardEntries}
