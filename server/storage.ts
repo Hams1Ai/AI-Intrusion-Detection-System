@@ -73,6 +73,7 @@ function generateSimulatedFlow(): FlowData {
     protocol: protocol,
     packet_size: Math.floor(Math.random() * 1500) + 64,
     duration: Math.round((Math.random() * 120) * 100) / 100,
+    using_real_ppo: false,
   };
 }
 
@@ -102,6 +103,7 @@ function getFlowFromMLPython(): FlowData | null {
       protocol: data.protocol,
       packet_size: data.packet_size,
       duration: data.duration,
+      using_real_ppo: data.using_real_ppo ?? false,
     };
   } catch (error) {
     console.log("ML prediction failed, falling back to simulation:", error);

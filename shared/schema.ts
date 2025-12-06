@@ -63,6 +63,7 @@ export const flowDataSchema = z.object({
   protocol: z.string().optional(),
   packet_size: z.number().optional(),
   duration: z.number().optional(),
+  using_real_ppo: z.boolean().optional(),
 });
 
 export type FlowData = z.infer<typeof flowDataSchema>;
