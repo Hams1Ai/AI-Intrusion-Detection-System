@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -448,6 +448,11 @@ export default function GamePage() {
     }
     submitMutation.mutate(action);
   }, [submitMutation, currentFlow]);
+
+  // Auto-load the first flow when the page opens
+  useEffect(() => {
+    loadNewFlow();
+  }, []);
 
   return (
     <div className="min-h-screen bg-background scanline-overlay">
