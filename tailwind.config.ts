@@ -81,6 +81,14 @@ export default {
           busy: "rgb(239 68 68)",
           offline: "rgb(156 163 175)",
         },
+        neon: {
+          cyan: "hsl(var(--neon-cyan) / <alpha-value>)",
+          purple: "hsl(var(--neon-purple) / <alpha-value>)",
+          blue: "hsl(var(--neon-blue) / <alpha-value>)",
+          green: "hsl(var(--neon-green) / <alpha-value>)",
+          yellow: "hsl(var(--neon-yellow) / <alpha-value>)",
+          red: "hsl(var(--neon-red) / <alpha-value>)",
+        },
       },
       fontFamily: {
         sans: ["var(--font-sans)"],
