@@ -9,20 +9,13 @@ import {
   XCircle, 
   Activity, 
   Zap, 
-  Target, 
+  Target,
   TrendingUp,
   RefreshCw,
   CheckCircle2,
   AlertTriangle,
   Star,
-  Clock,
-  Gauge,
-  Network,
-  Server,
-  Globe,
-  Package,
-  Wifi,
-  AlertOctagon
+  Gauge
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import type { FlowData, DecisionResult } from "@shared/schema";
@@ -58,42 +51,12 @@ interface FlowAnalyzerProps {
   isLoading: boolean;
 }
 
-const SUSPICIOUS_PORTS = [4444, 5555, 6666, 31337, 12345, 1337, 6667, 23, 135, 137, 138, 139, 445];
-const HIGH_RISK_PORTS = [22, 23, 3389, 5900, 5432, 3306, 27017, 6379];
-const COMMON_PORTS = [80, 443, 8080, 53];
-
-function getPortRiskLevel(port: number | undefined): { level: "suspicious" | "high-risk" | "common" | "normal"; label: string; color: string } {
-  if (!port) return { level: "normal", label: "Unknown", color: "text-muted-foreground" };
-  if (SUSPICIOUS_PORTS.includes(port)) return { level: "suspicious", label: "Suspicious", color: "text-neon-red" };
-  if (HIGH_RISK_PORTS.includes(port)) return { level: "high-risk", label: "High-Risk", color: "text-neon-yellow" };
-  if (COMMON_PORTS.includes(port)) return { level: "common", label: "Common", color: "text-neon-green" };
-  return { level: "normal", label: "Standard", color: "text-muted-foreground" };
-}
-
 function getRiskLevel(score: number): { level: string; color: string; bgColor: string; borderColor: string } {
   if (score >= 0.8) return { level: "CRITICAL", color: "text-neon-red", bgColor: "bg-neon-red/20", borderColor: "border-neon-red/50" };
   if (score >= 0.6) return { level: "HIGH", color: "text-neon-yellow", bgColor: "bg-neon-yellow/20", borderColor: "border-neon-yellow/50" };
   if (score >= 0.4) return { level: "MEDIUM", color: "text-neon-purple", bgColor: "bg-neon-purple/20", borderColor: "border-neon-purple/50" };
   if (score >= 0.2) return { level: "LOW", color: "text-neon-cyan", bgColor: "bg-neon-cyan/20", borderColor: "border-neon-cyan/50" };
   return { level: "MINIMAL", color: "text-neon-green", bgColor: "bg-neon-green/20", borderColor: "border-neon-green/50" };
-}
-
-function getPacketSizeCategory(size: number | undefined): { category: string; color: string; isAnomaly: boolean } {
-  if (!size) return { category: "Unknown", color: "text-muted-foreground", isAnomaly: false };
-  if (size < 100) return { category: "Tiny", color: "text-neon-cyan", isAnomaly: false };
-  if (size < 500) return { category: "Small", color: "text-neon-green", isAnomaly: false };
-  if (size < 1000) return { category: "Medium", color: "text-muted-foreground", isAnomaly: false };
-  if (size < 1400) return { category: "Large", color: "text-neon-yellow", isAnomaly: false };
-  return { category: "Jumbo", color: "text-neon-red", isAnomaly: true };
-}
-
-function getDurationCategory(duration: number | undefined): { category: string; color: string; isAnomaly: boolean } {
-  if (!duration) return { category: "Unknown", color: "text-muted-foreground", isAnomaly: false };
-  if (duration < 1) return { category: "Instant", color: "text-neon-cyan", isAnomaly: false };
-  if (duration < 10) return { category: "Short", color: "text-neon-green", isAnomaly: false };
-  if (duration < 60) return { category: "Normal", color: "text-muted-foreground", isAnomaly: false };
-  if (duration < 120) return { category: "Extended", color: "text-neon-yellow", isAnomaly: true };
-  return { category: "Persistent", color: "text-neon-red", isAnomaly: true };
 }
 
 function FlowAnalyzer({ flowData, isLoading }: FlowAnalyzerProps) {
@@ -136,35 +99,13 @@ function FlowAnalyzer({ flowData, isLoading }: FlowAnalyzerProps) {
 
   const isAttack = flowData.xgb_label === "ATTACK";
   const riskInfo = getRiskLevel(flowData.risk_score);
-  const portRisk = getPortRiskLevel(flowData.dst_port);
-  const packetInfo = getPacketSizeCategory(flowData.packet_size);
-  const durationInfo = getDurationCategory(flowData.duration);
-  
-  const anomalies: string[] = [];
-  if (portRisk.level === "suspicious") anomalies.push("Suspicious destination port");
-  if (portRisk.level === "high-risk") anomalies.push("High-risk service port");
-  if (packetInfo.isAnomaly) anomalies.push("Unusual packet size");
-  if (durationInfo.isAnomaly) anomalies.push("Extended connection duration");
-  if (flowData.risk_score >= 0.7) anomalies.push("High ML risk score");
 
   return (
     <Card className="neon-border-gradient neon-glow-cyan">
       <CardHeader className="pb-4">
-        <CardTitle className="flex items-center justify-between gap-2 text-lg uppercase tracking-wide">
-          <div className="flex items-center gap-2">
-            <Zap className="w-5 h-5 text-neon-cyan" />
-            RL Interactive Analyzer
-          </div>
-          {anomalies.length > 0 && (
-            <Badge 
-              variant="destructive" 
-              className="bg-neon-red/20 border border-neon-red/50 text-neon-red"
-              data-testid="badge-anomaly-count"
-            >
-              <AlertOctagon className="w-3 h-3 mr-1" />
-              {anomalies.length} {anomalies.length === 1 ? "Anomaly" : "Anomalies"}
-            </Badge>
-          )}
+        <CardTitle className="flex items-center gap-2 text-lg uppercase tracking-wide">
+          <Zap className="w-5 h-5 text-neon-cyan" />
+          RL Interactive Analyzer
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -229,87 +170,6 @@ function FlowAnalyzer({ flowData, isLoading }: FlowAnalyzerProps) {
           </div>
         </div>
 
-        {anomalies.length > 0 && (
-          <div className="p-3 rounded-md border border-neon-red/30 bg-neon-red/5 space-y-2" data-testid="panel-anomalies">
-            <div className="flex items-center gap-2 text-neon-red">
-              <AlertTriangle className="w-4 h-4" />
-              <span className="text-sm font-medium uppercase tracking-wide">Detected Anomalies</span>
-            </div>
-            <ul className="space-y-1">
-              {anomalies.map((anomaly, i) => (
-                <li key={i} className="flex items-center gap-2 text-sm text-neon-red/80">
-                  <span className="w-1.5 h-1.5 rounded-full bg-neon-red" />
-                  {anomaly}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-        
-        <div className="space-y-3">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground uppercase tracking-wide">
-            <Network className="w-4 h-4" />
-            Network Details
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="p-3 rounded-md bg-secondary/20 space-y-1">
-              <div className="flex items-center gap-2">
-                <Server className="w-3 h-3 text-muted-foreground" />
-                <span className="text-xs text-muted-foreground">Source</span>
-              </div>
-              <p className="text-sm font-mono" data-testid="text-src-ip">{flowData.src_ip}</p>
-              <p className="text-xs text-muted-foreground">Port: <span className="font-mono">{flowData.src_port}</span></p>
-            </div>
-            <div className="p-3 rounded-md bg-secondary/20 space-y-1">
-              <div className="flex items-center gap-2">
-                <Globe className="w-3 h-3 text-muted-foreground" />
-                <span className="text-xs text-muted-foreground">Destination</span>
-              </div>
-              <p className="text-sm font-mono" data-testid="text-dst-ip">{flowData.dst_ip}</p>
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground">Port:</span>
-                <span className={`text-xs font-mono font-medium ${portRisk.color}`} data-testid="text-dst-port">
-                  {flowData.dst_port}
-                </span>
-                {(portRisk.level === "suspicious" || portRisk.level === "high-risk") && (
-                  <Badge variant="outline" className={`text-xs px-1 py-0 ${portRisk.level === "suspicious" ? "border-neon-red/50 text-neon-red" : "border-neon-yellow/50 text-neon-yellow"}`}>
-                    {portRisk.label}
-                  </Badge>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-3 gap-3">
-          <div className="p-3 rounded-md bg-secondary/20 text-center">
-            <div className="flex items-center justify-center gap-1 mb-1">
-              <Wifi className="w-3 h-3 text-muted-foreground" />
-              <span className="text-xs text-muted-foreground">Protocol</span>
-            </div>
-            <p className="text-sm font-mono font-medium" data-testid="text-protocol">{flowData.protocol}</p>
-          </div>
-          <div className={`p-3 rounded-md text-center ${packetInfo.isAnomaly ? "bg-neon-red/10 border border-neon-red/30" : "bg-secondary/20"}`}>
-            <div className="flex items-center justify-center gap-1 mb-1">
-              <Package className="w-3 h-3 text-muted-foreground" />
-              <span className="text-xs text-muted-foreground">Packet Size</span>
-            </div>
-            <p className={`text-sm font-mono font-medium ${packetInfo.color}`} data-testid="text-packet-size">
-              {flowData.packet_size} bytes
-            </p>
-            <p className={`text-xs ${packetInfo.color}`} data-testid="text-packet-size-category">{packetInfo.category}</p>
-          </div>
-          <div className={`p-3 rounded-md text-center ${durationInfo.isAnomaly ? "bg-neon-red/10 border border-neon-red/30" : "bg-secondary/20"}`}>
-            <div className="flex items-center justify-center gap-1 mb-1">
-              <Clock className="w-3 h-3 text-muted-foreground" />
-              <span className="text-xs text-muted-foreground">Duration</span>
-            </div>
-            <p className={`text-sm font-mono font-medium ${durationInfo.color}`} data-testid="text-duration">
-              {flowData.duration?.toFixed(2)}s
-            </p>
-            <p className={`text-xs ${durationInfo.color}`} data-testid="text-duration-category">{durationInfo.category}</p>
-          </div>
-        </div>
         
         <div className="pt-4 border-t border-border/30">
           <p className="text-center text-sm text-muted-foreground uppercase tracking-wide">
