@@ -111,17 +111,27 @@ function getFlowFromMLPython(): FlowData | null {
   }
 }
 
-function calculateReward(userAction: number, rlAction: number, difficulty: Difficulty): number {
+function calculateReward(userAction: number, trueLabel: number, difficulty: Difficulty): number {
   const multipliers = difficultyMultipliers[difficulty];
   let baseReward: number;
 
-  // Reward logic: Match the RL agent's recommendation
-  // - Matching RL agent = +10 points
-  // - Differing from RL agent = -10 points
-  if (userAction === rlAction) {
-    baseReward = 10;  // User matched the RL agent's recommendation
-  } else {
-    baseReward = -10; // User differed from the RL agent's recommendation
+  // Reward logic based on TRUE LABEL (actual traffic type):
+  // - label == normal (0) AND action == ignore (0) → +10
+  // - label == attack (1) AND action == block (1) → +8
+  // - label == normal (0) AND action == block (1) → -5
+  // - label == attack (1) AND action == ignore (0) → -10
+  if (trueLabel === 0) {  // NORMAL traffic
+    if (userAction === 0) {
+      baseReward = 10;   // Correct: ignored normal traffic
+    } else {
+      baseReward = -5;   // Incorrect: blocked normal traffic (false positive)
+    }
+  } else {  // ATTACK traffic (trueLabel === 1)
+    if (userAction === 1) {
+      baseReward = 8;    // Correct: blocked attack
+    } else {
+      baseReward = -10;  // Incorrect: ignored attack (security breach)
+    }
   }
 
   if (baseReward > 0) {
@@ -174,11 +184,12 @@ export class DatabaseStorage implements IStorage {
     }
 
     const sessionId = await this.ensureSession();
-    const rlAction = flow.rl_action;
-    const reward = calculateReward(userAction, rlAction, this.currentDifficulty);
+    const trueLabel = flow.true_label;
+    const reward = calculateReward(userAction, trueLabel, this.currentDifficulty);
     
-    // isCorrect: did the user match the RL agent's recommendation?
-    const isCorrect = userAction === rlAction ? 1 : 0;
+    // isCorrect: did the user make the correct decision based on true label?
+    // Correct means: IGNORE normal traffic OR BLOCK attack traffic
+    const isCorrect = userAction === trueLabel ? 1 : 0;
 
     await db.insert(decisions).values({
       sessionId,
