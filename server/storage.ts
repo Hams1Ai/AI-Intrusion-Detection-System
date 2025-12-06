@@ -111,27 +111,17 @@ function getFlowFromMLPython(): FlowData | null {
   }
 }
 
-function calculateReward(userAction: number, trueLabel: number, difficulty: Difficulty): number {
+function calculateReward(userAction: number, rlAction: number, difficulty: Difficulty): number {
   const multipliers = difficultyMultipliers[difficulty];
   let baseReward: number;
 
-  // Reward logic focused on cybersecurity priorities:
-  // - Missing an attack is heavily penalized
-  // - Blocking benign traffic is undesirable but less critical
-  if (userAction === 0) {  // IGNORE
-    if (trueLabel === 0) {
-      baseReward = 10;     // Correct: allowed normal traffic
-    } else {
-      baseReward = -10;    // Incorrect: ignored a real attack
-    }
-  } else if (userAction === 1) {  // BLOCK
-    if (trueLabel === 1) {
-      baseReward = 8;      // Correct: blocked a malicious flow
-    } else {
-      baseReward = -5;     // Incorrect: blocked benign traffic
-    }
+  // Reward logic: Match the RL agent's recommendation
+  // - Matching RL agent = +10 points
+  // - Differing from RL agent = -10 points
+  if (userAction === rlAction) {
+    baseReward = 10;  // User matched the RL agent's recommendation
   } else {
-    baseReward = 0;
+    baseReward = -10; // User differed from the RL agent's recommendation
   }
 
   if (baseReward > 0) {
@@ -184,12 +174,11 @@ export class DatabaseStorage implements IStorage {
     }
 
     const sessionId = await this.ensureSession();
-    const trueLabel = flow.true_label;
-    const reward = calculateReward(userAction, trueLabel, this.currentDifficulty);
+    const rlAction = flow.rl_action;
+    const reward = calculateReward(userAction, rlAction, this.currentDifficulty);
     
-    // isCorrect: did the user make the optimal decision based on true label?
-    // IGNORE (0) is correct for NORMAL (0), BLOCK (1) is correct for ATTACK (1)
-    const isCorrect = userAction === trueLabel ? 1 : 0;
+    // isCorrect: did the user match the RL agent's recommendation?
+    const isCorrect = userAction === rlAction ? 1 : 0;
 
     await db.insert(decisions).values({
       sessionId,
