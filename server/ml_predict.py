@@ -153,7 +153,8 @@ def main():
     protocol_map = {6: 'TCP', 17: 'UDP', 1: 'ICMP'}
     protocol_num = int(features[1]) if len(features) > 1 else 6
     
-    true_label = 1 if is_attack else 0
+    # true_label matches XGBoost classification for consistent training
+    true_label = xgb_label
     
     src_ips = ["192.168.1.", "10.0.0.", "172.16.0.", "203.0.113.", "198.51.100."]
     dst_ips = ["8.8.8.", "1.1.1.", "104.16.", "151.101.", "185.199."]
