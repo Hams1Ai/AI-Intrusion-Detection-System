@@ -8,6 +8,7 @@ dependencies = [
     "joblib>=1.5.2",
     "numpy>=2.3.5",
     "scikit-learn>=1.7.2",
+    "stable-baselines3",
     "xgboost>=3.1.2",
 ]
 
@@ -914,7 +915,6 @@ spotiflow = [{ index = "pytorch-cpu", marker = "platform_system == 'Linux'" }]
 spotpython = [{ index = "pytorch-cpu", marker = "platform_system == 'Linux'" }]
 spotriver = [{ index = "pytorch-cpu", marker = "platform_system == 'Linux'" }]
 squirrel-core = [{ index = "pytorch-cpu", marker = "platform_system == 'Linux'" }]
-stable-baselines3 = [{ index = "pytorch-cpu", marker = "platform_system == 'Linux'" }]
 stable-diffusion-sdkit = [{ index = "pytorch-cpu", marker = "platform_system == 'Linux'" }]
 stable-ts = [{ index = "pytorch-cpu", marker = "platform_system == 'Linux'" }]
 stanford-stk = [{ index = "pytorch-cpu", marker = "platform_system == 'Linux'" }]

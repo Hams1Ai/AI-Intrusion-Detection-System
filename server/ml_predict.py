@@ -2,6 +2,7 @@
 """
 ML Prediction Script for AI Intrusion Detection System
 Called as a subprocess from Node.js to get predictions.
+Uses real XGBoost classifier and PPO reinforcement learning agent.
 """
 
 import os
@@ -18,13 +19,18 @@ import numpy as np
 
 MODEL_DIR = os.path.join(os.path.dirname(__file__), 'ml_models')
 
+ppo_model = None
+
 def load_models():
-    """Load the ML models."""
+    """Load the ML models including PPO."""
+    global ppo_model
+    
     scaler = None
     xgb_model = None
     
     scaler_path = os.path.join(MODEL_DIR, 'scaler.joblib')
     xgb_path = os.path.join(MODEL_DIR, 'xgb_model.pkl')
+    ppo_path = os.path.join(MODEL_DIR, 'ppo_model.zip')
     
     try:
         scaler = joblib.load(scaler_path)
@@ -37,7 +43,14 @@ def load_models():
     except:
         pass
     
-    return scaler, xgb_model
+    if ppo_model is None:
+        try:
+            from stable_baselines3 import PPO
+            ppo_model = PPO.load(ppo_path, device='cpu')
+        except Exception as e:
+            pass
+    
+    return scaler, xgb_model, ppo_model
 
 def generate_synthetic_features(is_attack_biased=None):
     """Generate synthetic network flow features (50 features)."""
@@ -79,8 +92,17 @@ def generate_synthetic_features(is_attack_biased=None):
     
     return features
 
-def predict_with_models(features, scaler, xgb_model):
-    """Make predictions using the loaded models."""
+def create_ppo_observation(risk_score):
+    """Create observation vector for PPO agent.
+    
+    The PPO agent expects just the risk score from XGBoost as a single float.
+    Observation space: Box(0.0, 1.0, (1,), float32)
+    """
+    obs = np.array([risk_score], dtype=np.float32)
+    return obs
+
+def predict_with_models(features, scaler, xgb_model, ppo_agent):
+    """Make predictions using the loaded models including real PPO."""
     x = np.array(features, dtype=float).reshape(1, -1)
     
     if xgb_model is not None:
@@ -99,21 +121,31 @@ def predict_with_models(features, scaler, xgb_model):
         risk_score = random.uniform(0, 1)
         xgb_label = 1 if risk_score > 0.5 else 0
     
-    if risk_score >= 0.6:
-        rl_action = 1
-    elif risk_score <= 0.3:
-        rl_action = 0
-    else:
-        rl_action = 1 if random.random() < risk_score else 0
+    rl_action = None
+    if ppo_agent is not None:
+        try:
+            obs = create_ppo_observation(risk_score)
+            action, _ = ppo_agent.predict(obs, deterministic=True)
+            rl_action = int(action)
+        except Exception as e:
+            rl_action = None
+    
+    if rl_action is None:
+        if risk_score >= 0.6:
+            rl_action = 1
+        elif risk_score <= 0.3:
+            rl_action = 0
+        else:
+            rl_action = 1 if random.random() < risk_score else 0
     
     return risk_score, xgb_label, rl_action
 
 def main():
-    scaler, xgb_model = load_models()
+    scaler, xgb_model, ppo_agent = load_models()
     
     features = generate_synthetic_features()
     
-    risk_score, xgb_label, rl_action = predict_with_models(features, scaler, xgb_model)
+    risk_score, xgb_label, rl_action = predict_with_models(features, scaler, xgb_model, ppo_agent)
     
     protocol_map = {6: 'TCP', 17: 'UDP', 1: 'ICMP'}
     protocol_num = int(features[1]) if len(features) > 1 else 6
@@ -141,6 +173,7 @@ def main():
         'protocol': protocol_map.get(protocol_num, 'TCP'),
         'duration': round(features[0], 2) if len(features) > 0 else 0,
         'packet_size': random.randint(64, 1500),
+        'using_real_ppo': ppo_agent is not None,
     }
     
     print(json.dumps(result))
