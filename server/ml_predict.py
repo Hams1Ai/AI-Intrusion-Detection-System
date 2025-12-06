@@ -53,7 +53,10 @@ def load_models():
     return scaler, xgb_model, ppo_model
 
 def generate_synthetic_features(is_attack_biased=None):
-    """Generate synthetic network flow features (50 features)."""
+    """Generate synthetic network flow features (50 features).
+    
+    Returns: (features, is_attack) - features list and ground truth label
+    """
     if is_attack_biased is None:
         is_attack_biased = random.random() < 0.4
     
@@ -90,7 +93,7 @@ def generate_synthetic_features(is_attack_biased=None):
         for _ in range(20):
             features.append(random.uniform(-1, 1))
     
-    return features
+    return features, is_attack_biased
 
 def create_ppo_observation(risk_score):
     """Create observation vector for PPO agent.
@@ -143,16 +146,14 @@ def predict_with_models(features, scaler, xgb_model, ppo_agent):
 def main():
     scaler, xgb_model, ppo_agent = load_models()
     
-    features = generate_synthetic_features()
+    features, is_attack = generate_synthetic_features()
     
     risk_score, xgb_label, rl_action = predict_with_models(features, scaler, xgb_model, ppo_agent)
     
     protocol_map = {6: 'TCP', 17: 'UDP', 1: 'ICMP'}
     protocol_num = int(features[1]) if len(features) > 1 else 6
     
-    true_label = 1 if risk_score > 0.5 else 0
-    if random.random() < 0.15:
-        true_label = 1 - true_label
+    true_label = 1 if is_attack else 0
     
     src_ips = ["192.168.1.", "10.0.0.", "172.16.0.", "203.0.113.", "198.51.100."]
     dst_ips = ["8.8.8.", "1.1.1.", "104.16.", "151.101.", "185.199."]
