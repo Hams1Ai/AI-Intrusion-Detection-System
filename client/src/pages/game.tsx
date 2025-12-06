@@ -616,6 +616,8 @@ export default function GamePage() {
   const [currentFlow, setCurrentFlow] = useState<FlowData | null>(null);
   const [lastResult, setLastResult] = useState<DecisionResult | null>(null);
   const [lastUserAction, setLastUserAction] = useState<number | null>(null);
+  const [lastFlowTrueLabel, setLastFlowTrueLabel] = useState<number | null>(null);
+  const [lastFlowRlAction, setLastFlowRlAction] = useState<number | null>(null);
   const [stats, setStats] = useState({
     total_score: 0,
     correct: 0,
@@ -627,6 +629,7 @@ export default function GamePage() {
   const [timerActive, setTimerActive] = useState(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const hasAutoSubmittedRef = useRef(false);
+  const isSubmittingRef = useRef(false);
 
   const { isLoading: isLoadingFlow, refetch: refetchFlow } = useQuery<FlowData>({
     queryKey: ["/api/next-flow"],
@@ -665,8 +668,13 @@ export default function GamePage() {
   }, [difficultyMutation]);
 
   const loadNewFlow = useCallback(async () => {
+    if (isSubmittingRef.current) {
+      return;
+    }
     setLastResult(null);
     setLastUserAction(null);
+    setLastFlowTrueLabel(null);
+    setLastFlowRlAction(null);
     hasAutoSubmittedRef.current = false;
     if (timerRef.current) {
       clearInterval(timerRef.current);
@@ -687,6 +695,7 @@ export default function GamePage() {
   const submitMutation = useMutation({
     mutationFn: async (userAction: number) => {
       if (!currentFlow) throw new Error("No flow loaded");
+      isSubmittingRef.current = true;
       const response = await apiRequest("POST", "/api/submit-decision", {
         flow_id: currentFlow.flow_id,
         user_action: userAction,
@@ -694,6 +703,7 @@ export default function GamePage() {
       return response.json() as Promise<DecisionResult>;
     },
     onSuccess: (data, userAction) => {
+      isSubmittingRef.current = false;
       if (timerRef.current) {
         clearInterval(timerRef.current);
       }
@@ -707,11 +717,18 @@ export default function GamePage() {
         accuracy: data.accuracy,
       });
     },
+    onError: () => {
+      isSubmittingRef.current = false;
+    },
   });
 
   const handleAction = useCallback((action: number) => {
+    if (currentFlow) {
+      setLastFlowTrueLabel(currentFlow.true_label);
+      setLastFlowRlAction(currentFlow.rl_action);
+    }
     submitMutation.mutate(action);
-  }, [submitMutation]);
+  }, [submitMutation, currentFlow]);
 
   useEffect(() => {
     if (timerActive && timeRemaining > 0) {
@@ -741,6 +758,8 @@ export default function GamePage() {
         clearInterval(timerRef.current);
       }
       setTimerActive(false);
+      setLastFlowTrueLabel(currentFlow.true_label);
+      setLastFlowRlAction(currentFlow.rl_action);
       const randomAction = Math.round(Math.random());
       submitMutation.mutate(randomAction);
     }
@@ -776,7 +795,7 @@ export default function GamePage() {
         <Button
           size="lg"
           onClick={loadNewFlow}
-          disabled={isLoadingFlow}
+          disabled={isLoadingFlow || submitMutation.isPending}
           className={`
             w-full h-14 text-lg font-bold uppercase tracking-wide
             bg-gradient-to-r from-neon-cyan/20 via-neon-purple/20 to-neon-blue/20
@@ -804,8 +823,8 @@ export default function GamePage() {
         <FeedbackPanel 
           result={lastResult}
           userAction={lastUserAction}
-          rlAction={currentFlow?.rl_action ?? null}
-          trueLabel={currentFlow?.true_label ?? null}
+          rlAction={lastFlowRlAction}
+          trueLabel={lastFlowTrueLabel}
         />
         
         <SessionStats stats={stats} />
