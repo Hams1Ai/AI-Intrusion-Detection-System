@@ -104,31 +104,5 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/leaderboard", async (req, res) => {
-    try {
-      const entries = await storage.getLeaderboard();
-      res.json(entries);
-    } catch (error) {
-      console.error("Error getting leaderboard:", error);
-      res.status(500).json({ error: "Failed to get leaderboard" });
-    }
-  });
-
-  app.post("/api/leaderboard", async (req, res) => {
-    try {
-      const { playerName } = req.body;
-      
-      if (!playerName || typeof playerName !== "string" || playerName.length < 1) {
-        return res.status(400).json({ error: "Player name is required" });
-      }
-
-      const entry = await storage.submitScore(playerName.substring(0, 50));
-      res.json(entry);
-    } catch (error) {
-      console.error("Error submitting score:", error);
-      res.status(500).json({ error: "Failed to submit score" });
-    }
-  });
-
   return httpServer;
 }

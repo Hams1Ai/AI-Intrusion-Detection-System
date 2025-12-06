@@ -54,9 +54,8 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import type { FlowData, DecisionResult, Decision, Difficulty, LeaderboardEntry } from "@shared/schema";
+import type { FlowData, DecisionResult, Decision, Difficulty } from "@shared/schema";
 import { difficultyMultipliers } from "@shared/schema";
-import { Trophy, Crown, Medal, User, Send } from "lucide-react";
 
 function Header() {
   return (
@@ -1127,238 +1126,6 @@ function AnalyticsDashboard({ decisions }: AnalyticsDashboardProps) {
   );
 }
 
-interface LeaderboardProps {
-  entries: LeaderboardEntry[];
-  isLoading: boolean;
-  currentScore: number;
-  onSubmitScore: () => void;
-  canSubmit: boolean;
-  totalFlows: number;
-}
-
-function Leaderboard({ entries, isLoading, currentScore, onSubmitScore, canSubmit, totalFlows }: LeaderboardProps) {
-  const getRankIcon = (rank: number) => {
-    if (rank === 1) return <Crown className="w-5 h-5 text-neon-yellow" />;
-    if (rank === 2) return <Medal className="w-5 h-5 text-gray-400" />;
-    if (rank === 3) return <Medal className="w-5 h-5 text-amber-600" />;
-    return <span className="w-5 h-5 flex items-center justify-center text-sm text-muted-foreground">#{rank}</span>;
-  };
-
-  const getDifficultyColor = (diff: string) => {
-    switch (diff) {
-      case "easy": return "text-neon-green";
-      case "normal": return "text-neon-cyan";
-      case "hard": return "text-neon-yellow";
-      case "expert": return "text-neon-red";
-      default: return "text-foreground";
-    }
-  };
-
-  return (
-    <Card className="neon-border-gradient neon-glow-yellow">
-      <CardHeader className="pb-2">
-        <CardTitle className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 text-lg uppercase tracking-wide">
-            <Trophy className="w-5 h-5 text-neon-yellow" />
-            Leaderboard
-          </div>
-          {canSubmit && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={onSubmitScore}
-              className="bg-neon-yellow/10 border-neon-yellow/50 text-neon-yellow"
-              data-testid="button-submit-score"
-            >
-              <Send className="w-4 h-4 mr-1" />
-              Submit Score
-            </Button>
-          )}
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        {isLoading ? (
-          <div className="flex items-center justify-center py-8">
-            <RefreshCw className="w-6 h-6 text-neon-yellow animate-spin" />
-          </div>
-        ) : entries.length === 0 ? (
-          <div className="text-center py-8 space-y-2">
-            <Trophy className="w-12 h-12 mx-auto text-neon-yellow/30" />
-            <p className="text-muted-foreground">No high scores yet. Be the first!</p>
-          </div>
-        ) : (
-          <ScrollArea className="h-72">
-            <div className="space-y-2">
-              {entries.map((entry, index) => (
-                <div
-                  key={entry.id}
-                  className={`p-3 rounded-md flex items-center gap-3 ${
-                    index === 0 ? "bg-neon-yellow/10 border border-neon-yellow/30" : "bg-secondary/20"
-                  }`}
-                  data-testid={`leaderboard-entry-${index}`}
-                >
-                  <div className="flex items-center justify-center w-8">
-                    {getRankIcon(index + 1)}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <User className="w-4 h-4 text-muted-foreground" />
-                      <span className="font-semibold truncate" data-testid={`text-player-name-${index}`}>
-                        {entry.playerName}
-                      </span>
-                      <Badge 
-                        variant="outline" 
-                        className={`text-xs ${getDifficultyColor(entry.difficulty)}`}
-                        data-testid={`badge-difficulty-${index}`}
-                      >
-                        {entry.difficulty.toUpperCase()}
-                      </Badge>
-                    </div>
-                    <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
-                      <span>Accuracy: {Math.round(entry.accuracy * 100)}%</span>
-                      <span>Flows: {entry.totalFlows}</span>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p 
-                      className={`text-xl font-bold ${entry.score >= 0 ? "neon-text-green" : "neon-text-red"}`}
-                      data-testid={`text-score-${index}`}
-                    >
-                      {entry.score}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </ScrollArea>
-        )}
-        {totalFlows > 0 && (
-          <div className="mt-4 pt-4 border-t border-border/30 text-center">
-            <p className="text-sm text-muted-foreground">
-              Your current score: <span className={currentScore >= 0 ? "neon-text-green" : "neon-text-red"} style={{fontWeight: 'bold'}}>{currentScore}</span>
-              {entries.length > 0 && entries.length >= 10 && currentScore > entries[entries.length - 1].score && (
-                <span className="ml-2 text-neon-yellow">Potential top 10!</span>
-              )}
-            </p>
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-interface SubmitScoreDialogProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onSubmit: (playerName: string) => void;
-  isPending: boolean;
-  currentScore: number;
-  accuracy: number;
-  difficulty: string;
-}
-
-function SubmitScoreDialog({ isOpen, onClose, onSubmit, isPending, currentScore, accuracy, difficulty }: SubmitScoreDialogProps) {
-  const [playerName, setPlayerName] = useState("");
-
-  useEffect(() => {
-    if (!isOpen) {
-      setPlayerName("");
-    }
-  }, [isOpen]);
-
-  const handleSubmit = () => {
-    if (playerName.trim().length > 0) {
-      onSubmit(playerName.trim());
-    }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && playerName.trim().length > 0) {
-      handleSubmit();
-    }
-  };
-
-  return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-md neon-border-gradient">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 neon-text-yellow">
-            <Trophy className="w-6 h-6" />
-            Submit Your Score
-          </DialogTitle>
-          <DialogDescription>
-            Enter your name to save your score to the leaderboard.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="space-y-4 py-4">
-          <div className="grid grid-cols-3 gap-4 text-center">
-            <div className="p-3 rounded-md bg-secondary/30">
-              <p className="text-xs text-muted-foreground uppercase">Score</p>
-              <p className={`text-xl font-bold ${currentScore >= 0 ? "neon-text-green" : "neon-text-red"}`}>
-                {currentScore}
-              </p>
-            </div>
-            <div className="p-3 rounded-md bg-secondary/30">
-              <p className="text-xs text-muted-foreground uppercase">Accuracy</p>
-              <p className="text-xl font-bold neon-text-purple">
-                {Math.round(accuracy * 100)}%
-              </p>
-            </div>
-            <div className="p-3 rounded-md bg-secondary/30">
-              <p className="text-xs text-muted-foreground uppercase">Difficulty</p>
-              <p className={`text-xl font-bold ${
-                difficulty === "easy" ? "text-neon-green" :
-                difficulty === "normal" ? "text-neon-cyan" :
-                difficulty === "hard" ? "text-neon-yellow" : "text-neon-red"
-              }`}>
-                {difficulty.toUpperCase()}
-              </p>
-            </div>
-          </div>
-          <div className="space-y-2">
-            <label htmlFor="playerName" className="text-sm font-medium">
-              Player Name
-            </label>
-            <Input
-              id="playerName"
-              value={playerName}
-              onChange={(e) => setPlayerName(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Enter your name..."
-              maxLength={50}
-              className="bg-background"
-              data-testid="input-player-name"
-            />
-          </div>
-        </div>
-        <DialogFooter className="gap-2">
-          <Button variant="outline" onClick={onClose} disabled={isPending} data-testid="button-cancel-submit">
-            Cancel
-          </Button>
-          <Button
-            onClick={handleSubmit}
-            disabled={isPending || playerName.trim().length === 0}
-            className="bg-neon-yellow/20 border border-neon-yellow/50 text-neon-yellow"
-            data-testid="button-confirm-submit"
-          >
-            {isPending ? (
-              <>
-                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                Submitting...
-              </>
-            ) : (
-              <>
-                <Send className="w-4 h-4 mr-2" />
-                Submit
-              </>
-            )}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 export default function GamePage() {
   const [currentFlow, setCurrentFlow] = useState<FlowData | null>(null);
   const [lastResult, setLastResult] = useState<DecisionResult | null>(null);
@@ -1372,7 +1139,6 @@ export default function GamePage() {
   const [difficulty, setDifficulty] = useState<Difficulty>("normal");
   const [timeRemaining, setTimeRemaining] = useState<number>(0);
   const [timerActive, setTimerActive] = useState(false);
-  const [showSubmitDialog, setShowSubmitDialog] = useState(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const hasAutoSubmittedRef = useRef(false);
 
@@ -1391,34 +1157,6 @@ export default function GamePage() {
     queryKey: ["/api/difficulty"],
     refetchOnWindowFocus: false,
   });
-
-  const { data: leaderboardEntries = [], isLoading: isLoadingLeaderboard, refetch: refetchLeaderboard } = useQuery<LeaderboardEntry[]>({
-    queryKey: ["/api/leaderboard"],
-    refetchOnWindowFocus: false,
-  });
-
-  const submitScoreMutation = useMutation({
-    mutationFn: async (playerName: string) => {
-      const response = await apiRequest("POST", "/api/leaderboard", { playerName });
-      return response.json();
-    },
-    onSuccess: () => {
-      setShowSubmitDialog(false);
-      refetchLeaderboard();
-    },
-  });
-
-  const handleOpenSubmitDialog = useCallback(() => {
-    setShowSubmitDialog(true);
-  }, []);
-
-  const handleCloseSubmitDialog = useCallback(() => {
-    setShowSubmitDialog(false);
-  }, []);
-
-  const handleSubmitScore = useCallback((playerName: string) => {
-    submitScoreMutation.mutate(playerName);
-  }, [submitScoreMutation]);
 
   useEffect(() => {
     if (serverDifficulty?.difficulty && serverDifficulty.difficulty !== difficulty) {
@@ -1597,26 +1335,7 @@ export default function GamePage() {
         </div>
         
         <AnalyticsDashboard decisions={decisionHistory} />
-        
-        <Leaderboard
-          entries={leaderboardEntries}
-          isLoading={isLoadingLeaderboard}
-          currentScore={stats.total_score}
-          onSubmitScore={handleOpenSubmitDialog}
-          canSubmit={stats.total_flows > 0 && lastResult !== null}
-          totalFlows={stats.total_flows}
-        />
       </main>
-      
-      <SubmitScoreDialog
-        isOpen={showSubmitDialog}
-        onClose={handleCloseSubmitDialog}
-        onSubmit={handleSubmitScore}
-        isPending={submitScoreMutation.isPending}
-        currentScore={stats.total_score}
-        accuracy={stats.accuracy}
-        difficulty={difficulty}
-      />
       
       <footer className="text-center py-6 text-muted-foreground text-sm border-t border-border/30">
         <p className="flex items-center justify-center gap-2">

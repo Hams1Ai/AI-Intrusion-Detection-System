@@ -37,28 +37,15 @@ export const decisions = pgTable("decisions", {
   duration: real("duration"),
 });
 
-export const leaderboard = pgTable("leaderboard", {
-  id: serial("id").primaryKey(),
-  playerName: varchar("player_name", { length: 50 }).notNull(),
-  score: integer("score").notNull(),
-  accuracy: real("accuracy").notNull(),
-  totalFlows: integer("total_flows").notNull(),
-  difficulty: varchar("difficulty", { length: 20 }).notNull(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-});
-
 // Insert schemas
 export const insertGameSessionSchema = createInsertSchema(gameSessions).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertDecisionSchema = createInsertSchema(decisions).omit({ id: true, createdAt: true });
-export const insertLeaderboardSchema = createInsertSchema(leaderboard).omit({ id: true, createdAt: true });
 
 // Types
 export type GameSession = typeof gameSessions.$inferSelect;
 export type InsertGameSession = z.infer<typeof insertGameSessionSchema>;
 export type Decision = typeof decisions.$inferSelect;
 export type InsertDecision = z.infer<typeof insertDecisionSchema>;
-export type LeaderboardEntry = typeof leaderboard.$inferSelect;
-export type InsertLeaderboardEntry = z.infer<typeof insertLeaderboardSchema>;
 
 // API schemas (for request/response validation)
 export const flowDataSchema = z.object({

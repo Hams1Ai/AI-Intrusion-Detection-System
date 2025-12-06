@@ -1,6 +1,6 @@
 import { db } from "./db";
-import { gameSessions, decisions, leaderboard, difficultyMultipliers } from "@shared/schema";
-import type { FlowData, DecisionResult, SessionStats, Difficulty, Decision, LeaderboardEntry } from "@shared/schema";
+import { gameSessions, decisions, difficultyMultipliers } from "@shared/schema";
+import type { FlowData, DecisionResult, SessionStats, Difficulty, Decision } from "@shared/schema";
 import { eq, desc } from "drizzle-orm";
 import { execSync } from "child_process";
 import path from "path";
@@ -17,8 +17,6 @@ export interface IStorage {
   getDecisionHistory(): Promise<Decision[]>;
   setDifficulty(difficulty: Difficulty): Promise<void>;
   getDifficulty(): Promise<Difficulty>;
-  getLeaderboard(): Promise<LeaderboardEntry[]>;
-  submitScore(playerName: string): Promise<LeaderboardEntry>;
 }
 
 function generateRandomIp(): string {
@@ -301,33 +299,6 @@ export class DatabaseStorage implements IStorage {
 
   async getDifficulty(): Promise<Difficulty> {
     return this.currentDifficulty;
-  }
-
-  async getLeaderboard(): Promise<LeaderboardEntry[]> {
-    const entries = await db
-      .select()
-      .from(leaderboard)
-      .orderBy(desc(leaderboard.score))
-      .limit(10);
-
-    return entries;
-  }
-
-  async submitScore(playerName: string): Promise<LeaderboardEntry> {
-    const stats = await this.getSessionStats();
-
-    const [entry] = await db
-      .insert(leaderboard)
-      .values({
-        playerName,
-        score: stats.total_score,
-        accuracy: stats.accuracy,
-        totalFlows: stats.total_flows,
-        difficulty: this.currentDifficulty,
-      })
-      .returning();
-
-    return entry;
   }
 }
 
