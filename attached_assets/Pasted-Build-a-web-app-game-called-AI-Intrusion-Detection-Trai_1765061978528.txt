@@ -1,0 +1,157 @@
+Build a web app game called AI Intrusion Detection Trainer.
+The goal is to train SOC analysts to follow an AI assistant (PPO RL agent) and earn points.
+
+Core idea
+
+Each network flow has:
+
+flow_id
+
+xgb_label → "NORMAL" or "ATTACK" (from an XGBoost model)
+
+risk_score → number between 0 and 1 (or 0–100%)
+
+rl_action → the PPO agent’s recommendation: "IGNORE" or "BLOCK"
+
+The RL agent is always considered correct in this game.
+We don’t use the real ground-truth label for scoring.
+The scoring is based only on whether the human matches the RL recommendation.
+
+Game logic
+
+When the user clicks “Load New Flow”, the backend should:
+
+Select or generate a new flow.
+
+Return:
+
+flow_id
+
+xgb_label (NORMAL / ATTACK)
+
+risk_score (e.g. 0.83 → 83%)
+
+rl_action (IGNORE or BLOCK)
+
+Also send current session stats:
+
+total_score
+
+total_flows
+
+correct
+
+accuracy (correct / total_flows * 100)
+
+The UI shows:
+
+XGBoost Classification (big label: NORMAL or ATTACK)
+
+Risk score bar (for example “83% CRITICAL”)
+
+A question:
+
+“What action should the SOC analyst take?”
+
+Two big buttons:
+
+IGNORE (blue)
+
+BLOCK (red)
+
+When the user chooses an action:
+
+Send flow_id and user_action to a /api/submit-action endpoint.
+
+The backend compares:
+
+user_action vs rl_action
+
+Reward rule (very important):
+
+If user_action == rl_action →
+
+reward = +10
+
+Count it as correct += 1
+
+Else →
+
+reward = -10
+
+Update stats:
+
+total_score += reward
+
+total_flows += 1
+
+accuracy = correct / total_flows * 100
+
+The UI then shows a feedback card:
+
+If correct:
+
+Title: “Correct Decision” (green)
+
+Text example:
+“Great! You followed the AI recommendation. +10 points!”
+
+If wrong:
+
+Title: “Incorrect Decision” (red)
+
+Text example:
+“You chose a different action than the AI. -10 points.”
+
+Show:
+
+Your action: IGNORE or BLOCK
+
+RL agent recommends: IGNORE or BLOCK
+
+A small badge:
+
+If user_action == rl_action → badge text: Matches Agent
+
+Else → badge text: Different from Agent
+
+At the bottom, show Session Stats as 4 boxes:
+
+TOTAL SCORE → current total_score
+
+TOTAL FLOWS → current total_flows
+
+CORRECT → number of correct decisions
+
+ACCURACY → percentage with % sign
+
+Technical notes
+
+You can simulate flows in code (no need for a real dataset in this project).
+
+However, keep the fields ready so we can later plug in:
+
+a real XGBoost model for xgb_label and risk_score
+
+a real PPO model for rl_action.
+
+The most important part is:
+
+Scoring must depend ONLY on matching the RL action
+(user_action == rl_action → +10, else -10)
+
+The game is designed so that “trusting the AI” is always rewarded.
+
+Please generate:
+
+A backend with the two routes:
+
+GET /api/next-flow
+
+POST /api/submit-action
+
+A frontend UI (HTML/CSS/JS or React) that matches the cyberpunk style dashboard:
+
+Big glowing buttons
+
+Panels for “XGBoost Classification”, “Risk Score”, “RL Agent Recommendation”, and “Session Stats”.

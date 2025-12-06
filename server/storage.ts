@@ -111,22 +111,14 @@ function getFlowFromMLPython(): FlowData | null {
   }
 }
 
-function calculateReward(userAction: number, trueLabel: number, difficulty: Difficulty): number {
+function calculateReward(userAction: number, rlAction: number, difficulty: Difficulty): number {
   const multipliers = difficultyMultipliers[difficulty];
   let baseReward: number;
 
-  if (userAction === 0) {
-    if (trueLabel === 0) {
-      baseReward = 10;
-    } else {
-      baseReward = -10;
-    }
+  if (userAction === rlAction) {
+    baseReward = 10;
   } else {
-    if (trueLabel === 1) {
-      baseReward = 8;
-    } else {
-      baseReward = -5;
-    }
+    baseReward = -10;
   }
 
   if (baseReward > 0) {
@@ -179,9 +171,9 @@ export class DatabaseStorage implements IStorage {
     }
 
     const sessionId = await this.ensureSession();
-    const trueLabel = flow.true_label;
-    const reward = calculateReward(userAction, trueLabel, this.currentDifficulty);
-    const isCorrect = reward > 0 ? 1 : 0;
+    const rlAction = flow.rl_action;
+    const reward = calculateReward(userAction, rlAction, this.currentDifficulty);
+    const isCorrect = userAction === rlAction ? 1 : 0;
 
     await db.insert(decisions).values({
       sessionId,
