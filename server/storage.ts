@@ -2,6 +2,12 @@ import { db } from "./db";
 import { gameSessions, decisions, leaderboard, difficultyMultipliers } from "@shared/schema";
 import type { FlowData, DecisionResult, SessionStats, Difficulty, Decision, LeaderboardEntry } from "@shared/schema";
 import { eq, desc } from "drizzle-orm";
+import { execSync } from "child_process";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export interface IStorage {
   getNextFlow(): Promise<FlowData>;
@@ -73,6 +79,39 @@ function generateSimulatedFlow(): FlowData {
   };
 }
 
+function getFlowFromMLPython(): FlowData | null {
+  try {
+    const scriptPath = path.join(__dirname, 'ml_predict.py');
+    const output = execSync(`python3 ${scriptPath}`, {
+      encoding: 'utf-8',
+      timeout: 10000,
+      cwd: __dirname,
+    });
+    
+    const data = JSON.parse(output.trim());
+    console.log("ML prediction successful, risk_score:", data.risk_score);
+    
+    return {
+      flow_id: data.flow_id,
+      risk_score: data.risk_score,
+      xgb_label: data.xgb_label as "ATTACK" | "NORMAL",
+      xgb_label_raw: data.xgb_label_raw,
+      rl_action: data.rl_action,
+      true_label: data.true_label,
+      src_ip: data.src_ip,
+      dst_ip: data.dst_ip,
+      src_port: data.src_port,
+      dst_port: data.dst_port,
+      protocol: data.protocol,
+      packet_size: data.packet_size,
+      duration: data.duration,
+    };
+  } catch (error) {
+    console.log("ML prediction failed, falling back to simulation:", error);
+    return null;
+  }
+}
+
 function calculateReward(userAction: number, trueLabel: number, difficulty: Difficulty): number {
   const multipliers = difficultyMultipliers[difficulty];
   let baseReward: number;
@@ -115,7 +154,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getNextFlow(): Promise<FlowData> {
-    this.currentFlow = generateSimulatedFlow();
+    const mlFlow = getFlowFromMLPython();
+    this.currentFlow = mlFlow ?? generateSimulatedFlow();
     return this.currentFlow;
   }
 
