@@ -65,16 +65,6 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/decision-history", async (req, res) => {
-    try {
-      const history = await storage.getDecisionHistory();
-      res.json(history);
-    } catch (error) {
-      console.error("Error getting decision history:", error);
-      res.status(500).json({ error: "Failed to get decision history" });
-    }
-  });
-
   app.get("/api/difficulty", async (req, res) => {
     try {
       const difficulty = await storage.getDifficulty();

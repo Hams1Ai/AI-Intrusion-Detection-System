@@ -1,7 +1,7 @@
 import { db } from "./db";
 import { gameSessions, decisions, difficultyMultipliers } from "@shared/schema";
-import type { FlowData, DecisionResult, SessionStats, Difficulty, Decision } from "@shared/schema";
-import { eq, desc } from "drizzle-orm";
+import type { FlowData, DecisionResult, SessionStats, Difficulty } from "@shared/schema";
+import { eq } from "drizzle-orm";
 import { execSync } from "child_process";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -14,7 +14,6 @@ export interface IStorage {
   submitDecision(flowId: number, userAction: number): Promise<DecisionResult>;
   getSessionStats(): Promise<SessionStats>;
   resetSession(): Promise<void>;
-  getDecisionHistory(): Promise<Decision[]>;
   setDifficulty(difficulty: Difficulty): Promise<void>;
   getDifficulty(): Promise<Difficulty>;
 }
@@ -271,20 +270,6 @@ export class DatabaseStorage implements IStorage {
     this.currentFlow = null;
     this.currentDifficulty = "normal";
     this.flowCache.clear();
-  }
-
-  async getDecisionHistory(): Promise<Decision[]> {
-    if (this.currentSessionId === null) {
-      return [];
-    }
-
-    const history = await db
-      .select()
-      .from(decisions)
-      .where(eq(decisions.sessionId, this.currentSessionId))
-      .orderBy(desc(decisions.createdAt));
-
-    return history;
   }
 
   async setDifficulty(difficulty: Difficulty): Promise<void> {
