@@ -1,8 +1,11 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Progress } from "@/components/ui/progress";
 import { 
   Shield, 
   XCircle, 
@@ -13,10 +16,15 @@ import {
   RefreshCw,
   CheckCircle2,
   AlertTriangle,
-  Star
+  Star,
+  History,
+  Clock,
+  Gauge,
+  Timer
 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { FlowData, DecisionResult } from "@shared/schema";
+import type { FlowData, DecisionResult, Decision, Difficulty } from "@shared/schema";
+import { difficultyMultipliers } from "@shared/schema";
 
 function Header() {
   return (
@@ -41,6 +49,96 @@ function Header() {
         </Badge>
       </div>
     </header>
+  );
+}
+
+interface DifficultySelectorProps {
+  difficulty: Difficulty;
+  onDifficultyChange: (difficulty: Difficulty) => void;
+  disabled: boolean;
+}
+
+function DifficultySelector({ difficulty, onDifficultyChange, disabled }: DifficultySelectorProps) {
+  const difficultyInfo: Record<Difficulty, { label: string; color: string; description: string }> = {
+    easy: { label: "EASY", color: "text-neon-green", description: "0.5x penalties, no timer" },
+    normal: { label: "NORMAL", color: "text-neon-cyan", description: "1x rewards/penalties, no timer" },
+    hard: { label: "HARD", color: "text-neon-yellow", description: "1.5x multiplier, 30s timer" },
+    expert: { label: "EXPERT", color: "text-neon-red", description: "2x multiplier, 15s timer" },
+  };
+
+  return (
+    <Card className="neon-border-gradient">
+      <CardContent className="p-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <Gauge className="w-5 h-5 text-neon-purple" />
+            <div>
+              <p className="text-sm font-medium uppercase tracking-wide">Difficulty Level</p>
+              <p className="text-xs text-muted-foreground">{difficultyInfo[difficulty].description}</p>
+            </div>
+          </div>
+          <Select
+            value={difficulty}
+            onValueChange={(value) => onDifficultyChange(value as Difficulty)}
+            disabled={disabled}
+          >
+            <SelectTrigger className="w-40" data-testid="select-difficulty">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="easy" data-testid="select-difficulty-easy">
+                <span className="text-neon-green font-semibold">EASY</span>
+              </SelectItem>
+              <SelectItem value="normal" data-testid="select-difficulty-normal">
+                <span className="text-neon-cyan font-semibold">NORMAL</span>
+              </SelectItem>
+              <SelectItem value="hard" data-testid="select-difficulty-hard">
+                <span className="text-neon-yellow font-semibold">HARD</span>
+              </SelectItem>
+              <SelectItem value="expert" data-testid="select-difficulty-expert">
+                <span className="text-neon-red font-semibold">EXPERT</span>
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+interface TimerProps {
+  timeLimit: number | null;
+  timeRemaining: number;
+  isActive: boolean;
+}
+
+function TimerDisplay({ timeLimit, timeRemaining, isActive }: TimerProps) {
+  if (!timeLimit || !isActive) return null;
+
+  const progress = (timeRemaining / timeLimit) * 100;
+  const isLow = timeRemaining <= 5;
+  const isExpired = timeRemaining <= 0;
+
+  return (
+    <Card className={`neon-border-gradient ${isLow ? "neon-glow-red" : "neon-glow-yellow"}`}>
+      <CardContent className="p-4">
+        <div className="flex items-center gap-4">
+          <Timer className={`w-6 h-6 ${isLow ? "text-neon-red animate-pulse" : "text-neon-yellow"}`} />
+          <div className="flex-1 space-y-2">
+            <div className="flex justify-between items-center">
+              <p className="text-sm uppercase tracking-wide font-medium">Time Pressure</p>
+              <span className={`text-2xl font-bold ${isLow ? "neon-text-red" : "neon-text-yellow"}`} data-testid="text-timer">
+                {isExpired ? "TIME'S UP!" : `${timeRemaining}s`}
+              </span>
+            </div>
+            <Progress 
+              value={progress} 
+              className={`h-2 ${isLow ? "[&>div]:bg-neon-red" : "[&>div]:bg-neon-yellow"}`}
+            />
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -131,6 +229,27 @@ function FlowAnalyzer({ flowData, isLoading }: FlowAnalyzerProps) {
           </div>
         </div>
         
+        {flowData.src_ip && (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 border-t border-border/30">
+            <div className="p-2 rounded bg-secondary/20">
+              <p className="text-xs text-muted-foreground">Source IP</p>
+              <p className="text-sm font-mono" data-testid="text-src-ip">{flowData.src_ip}</p>
+            </div>
+            <div className="p-2 rounded bg-secondary/20">
+              <p className="text-xs text-muted-foreground">Dest IP</p>
+              <p className="text-sm font-mono" data-testid="text-dst-ip">{flowData.dst_ip}</p>
+            </div>
+            <div className="p-2 rounded bg-secondary/20">
+              <p className="text-xs text-muted-foreground">Protocol</p>
+              <p className="text-sm font-mono" data-testid="text-protocol">{flowData.protocol}</p>
+            </div>
+            <div className="p-2 rounded bg-secondary/20">
+              <p className="text-xs text-muted-foreground">Dest Port</p>
+              <p className="text-sm font-mono" data-testid="text-dst-port">{flowData.dst_port}</p>
+            </div>
+          </div>
+        )}
+        
         <div className="pt-4 border-t border-border/30">
           <p className="text-center text-sm text-muted-foreground uppercase tracking-wide">
             RL Agent Recommendation: 
@@ -149,10 +268,11 @@ interface ActionButtonsProps {
   isSubmitting: boolean;
   hasFlow: boolean;
   hasResult: boolean;
+  timerExpired: boolean;
 }
 
-function ActionButtons({ onAction, isSubmitting, hasFlow, hasResult }: ActionButtonsProps) {
-  const disabled = isSubmitting || !hasFlow || hasResult;
+function ActionButtons({ onAction, isSubmitting, hasFlow, hasResult, timerExpired }: ActionButtonsProps) {
+  const disabled = isSubmitting || !hasFlow || hasResult || timerExpired;
   
   return (
     <div className="space-y-4">
@@ -337,6 +457,134 @@ function SessionStats({ stats }: SessionStatsProps) {
   );
 }
 
+interface DecisionHistoryProps {
+  decisions: Decision[];
+  isLoading: boolean;
+}
+
+function DecisionHistory({ decisions, isLoading }: DecisionHistoryProps) {
+  if (isLoading) {
+    return (
+      <Card className="neon-border-gradient">
+        <CardHeader className="pb-2">
+          <CardTitle className="flex items-center gap-2 text-lg uppercase tracking-wide">
+            <History className="w-5 h-5 text-neon-purple" />
+            Decision History
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-center py-8">
+            <RefreshCw className="w-6 h-6 text-neon-purple animate-spin" />
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (decisions.length === 0) {
+    return (
+      <Card className="neon-border-gradient">
+        <CardHeader className="pb-2">
+          <CardTitle className="flex items-center gap-2 text-lg uppercase tracking-wide">
+            <History className="w-5 h-5 text-neon-purple" />
+            Decision History
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-center text-muted-foreground py-8">No decisions yet. Start analyzing flows!</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card className="neon-border-gradient">
+      <CardHeader className="pb-2">
+        <CardTitle className="flex items-center gap-2 text-lg uppercase tracking-wide">
+          <History className="w-5 h-5 text-neon-purple" />
+          Decision History
+          <Badge variant="secondary" className="ml-2">{decisions.length}</Badge>
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <ScrollArea className="h-64">
+          <div className="space-y-2">
+            {decisions.map((decision, index) => (
+              <div 
+                key={decision.id}
+                className={`p-3 rounded-md space-y-2 ${
+                  decision.isCorrect ? "bg-neon-green/5 border border-neon-green/20" : "bg-neon-red/5 border border-neon-red/20"
+                }`}
+                data-testid={`decision-history-item-${index}`}
+              >
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                      decision.isCorrect ? "bg-neon-green/20" : "bg-neon-red/20"
+                    }`}>
+                      {decision.isCorrect ? (
+                        <CheckCircle2 className="w-4 h-4 text-neon-green" />
+                      ) : (
+                        <AlertTriangle className="w-4 h-4 text-neon-red" />
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">
+                        Flow #{decision.flowId.toString().padStart(5, '0')}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        You: {decision.userAction === 1 ? "Block" : "Ignore"} | 
+                        RL: {decision.rlAction === 1 ? "Block" : "Ignore"} |
+                        Truth: {decision.trueLabel === 1 ? "Attack" : "Normal"}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge 
+                      variant="outline"
+                      className={decision.xgbLabel === "ATTACK" 
+                        ? "border-neon-red/50 text-neon-red" 
+                        : "border-neon-green/50 text-neon-green"
+                      }
+                      data-testid={`badge-xgb-${index}`}
+                    >
+                      {decision.xgbLabel}
+                    </Badge>
+                    <span 
+                      className={`font-bold text-sm ${decision.reward > 0 ? "neon-text-green" : "neon-text-red"}`}
+                      data-testid={`text-reward-${index}`}
+                    >
+                      {decision.reward > 0 ? "+" : ""}{decision.reward}
+                    </span>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                  <div className="p-1.5 rounded bg-secondary/20">
+                    <span className="text-muted-foreground">Src: </span>
+                    <span className="font-mono" data-testid={`text-src-${index}`}>{decision.srcIp}:{decision.srcPort}</span>
+                  </div>
+                  <div className="p-1.5 rounded bg-secondary/20">
+                    <span className="text-muted-foreground">Dst: </span>
+                    <span className="font-mono" data-testid={`text-dst-${index}`}>{decision.dstIp}:{decision.dstPort}</span>
+                  </div>
+                  <div className="p-1.5 rounded bg-secondary/20">
+                    <span className="text-muted-foreground">Proto: </span>
+                    <span className="font-mono" data-testid={`text-protocol-${index}`}>{decision.protocol}</span>
+                  </div>
+                  <div className="p-1.5 rounded bg-secondary/20">
+                    <span className="text-muted-foreground">Risk: </span>
+                    <span className="font-mono" data-testid={`text-risk-${index}`}>{decision.riskScore.toFixed(2)}</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </ScrollArea>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function GamePage() {
   const [currentFlow, setCurrentFlow] = useState<FlowData | null>(null);
   const [lastResult, setLastResult] = useState<DecisionResult | null>(null);
@@ -347,20 +595,73 @@ export default function GamePage() {
     total_flows: 0,
     accuracy: 0,
   });
+  const [difficulty, setDifficulty] = useState<Difficulty>("normal");
+  const [timeRemaining, setTimeRemaining] = useState<number>(0);
+  const [timerActive, setTimerActive] = useState(false);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const hasAutoSubmittedRef = useRef(false);
 
   const { isLoading: isLoadingFlow, refetch: refetchFlow } = useQuery<FlowData>({
     queryKey: ["/api/next-flow"],
     enabled: false,
   });
 
+  const { data: decisionHistory = [], isLoading: isLoadingHistory, refetch: refetchHistory } = useQuery<Decision[]>({
+    queryKey: ["/api/decision-history"],
+    enabled: true,
+    refetchOnWindowFocus: false,
+  });
+
+  const { data: serverDifficulty } = useQuery<{ difficulty: Difficulty }>({
+    queryKey: ["/api/difficulty"],
+    refetchOnWindowFocus: false,
+  });
+
+  useEffect(() => {
+    if (serverDifficulty?.difficulty && serverDifficulty.difficulty !== difficulty) {
+      setDifficulty(serverDifficulty.difficulty);
+    }
+  }, [serverDifficulty, difficulty]);
+
+  const difficultyMutation = useMutation({
+    mutationFn: async (newDifficulty: Difficulty) => {
+      const response = await apiRequest("POST", "/api/difficulty", { difficulty: newDifficulty });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/difficulty"] });
+    },
+  });
+
+  const handleDifficultyChange = useCallback((newDifficulty: Difficulty) => {
+    setDifficulty(newDifficulty);
+    difficultyMutation.mutate(newDifficulty);
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+    }
+    setTimerActive(false);
+    setTimeRemaining(0);
+  }, [difficultyMutation]);
+
   const loadNewFlow = useCallback(async () => {
     setLastResult(null);
     setLastUserAction(null);
+    hasAutoSubmittedRef.current = false;
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+    }
+    setTimerActive(false);
+    
     const result = await refetchFlow();
     if (result.data) {
       setCurrentFlow(result.data);
+      const timeLimit = difficultyMultipliers[difficulty].timeLimit;
+      if (timeLimit) {
+        setTimeRemaining(timeLimit);
+        setTimerActive(true);
+      }
     }
-  }, [refetchFlow]);
+  }, [refetchFlow, difficulty]);
 
   const submitMutation = useMutation({
     mutationFn: async (userAction: number) => {
@@ -368,11 +669,14 @@ export default function GamePage() {
       const response = await apiRequest("POST", "/api/submit-decision", {
         flow_id: currentFlow.flow_id,
         user_action: userAction,
-        true_label: currentFlow.true_label,
       });
       return response.json() as Promise<DecisionResult>;
     },
     onSuccess: (data, userAction) => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+      setTimerActive(false);
       setLastResult(data);
       setLastUserAction(userAction);
       setStats({
@@ -381,6 +685,7 @@ export default function GamePage() {
         total_flows: data.total_flows,
         accuracy: data.accuracy,
       });
+      refetchHistory();
     },
   });
 
@@ -388,11 +693,56 @@ export default function GamePage() {
     submitMutation.mutate(action);
   }, [submitMutation]);
 
+  useEffect(() => {
+    if (timerActive && timeRemaining > 0) {
+      timerRef.current = setInterval(() => {
+        setTimeRemaining((prev) => {
+          if (prev <= 1) {
+            if (timerRef.current) {
+              clearInterval(timerRef.current);
+            }
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+    };
+  }, [timerActive]);
+
+  useEffect(() => {
+    if (timerActive && timeRemaining === 0 && currentFlow && !lastResult && !hasAutoSubmittedRef.current && !submitMutation.isPending) {
+      hasAutoSubmittedRef.current = true;
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+      setTimerActive(false);
+      const randomAction = Math.round(Math.random());
+      submitMutation.mutate(randomAction);
+    }
+  }, [timeRemaining, timerActive, currentFlow, lastResult, submitMutation]);
+
   return (
     <div className="min-h-screen bg-background scanline-overlay">
       <Header />
       
       <main className="max-w-4xl mx-auto px-4 py-8 space-y-8">
+        <DifficultySelector 
+          difficulty={difficulty}
+          onDifficultyChange={handleDifficultyChange}
+          disabled={isLoadingFlow || submitMutation.isPending || difficultyMutation.isPending}
+        />
+        
+        <TimerDisplay 
+          timeLimit={difficultyMultipliers[difficulty].timeLimit}
+          timeRemaining={timeRemaining}
+          isActive={timerActive && !lastResult}
+        />
+        
         <FlowAnalyzer flowData={currentFlow} isLoading={isLoadingFlow} />
         
         <ActionButtons 
@@ -400,6 +750,7 @@ export default function GamePage() {
           isSubmitting={submitMutation.isPending}
           hasFlow={!!currentFlow}
           hasResult={!!lastResult}
+          timerExpired={timerActive && timeRemaining === 0}
         />
         
         <Button
@@ -437,7 +788,10 @@ export default function GamePage() {
           trueLabel={currentFlow?.true_label ?? null}
         />
         
-        <SessionStats stats={stats} />
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <SessionStats stats={stats} />
+          <DecisionHistory decisions={decisionHistory} isLoading={isLoadingHistory} />
+        </div>
       </main>
       
       <footer className="text-center py-6 text-muted-foreground text-sm border-t border-border/30">
