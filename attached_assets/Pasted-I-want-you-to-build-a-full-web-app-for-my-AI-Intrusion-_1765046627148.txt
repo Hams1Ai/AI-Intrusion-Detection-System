@@ -1,0 +1,64 @@
+I want you to build a full web app for my AI Intrusion Detection System game.
+
+### Tech stack
+- Backend: Python (Flask) running on Replit
+- Frontend: HTML + CSS + JavaScript (or a simple JS framework if you prefer)
+- The app will load pre-trained ML models from local files.
+
+### Goal of the app
+The app should simulate a SOC (Security Operations Center) analyst playing a game:
+- XGBoost model gives a risk score and a NORMAL/ATTACK label.
+- PPO RL agent gives a recommended action (Ignore or Block).
+- The human user chooses an action using two buttons.
+- The app calculates reward and updates session stats (score, accuracy, etc.).
+
+I already have trained models saved in the Replit files:
+- `xgb_model.pkl`          → XGBoost classifier
+- `ctu13_scaler_clean.joblib` → StandardScaler used before XGBoost
+- `ppo_ids_agent`          → PPO agent folder/model (from stable-baselines3)
+
+Please implement the app assuming these files exist in the project root.
+
+------------------------------------------------
+### 1) Backend design (Flask)
+Create a Flask app called `main.py` with:
+
+**Imports**
+- flask: Flask, render_template, jsonify, request
+- joblib, numpy as np
+- stable_baselines3.PPO
+- random for sampling flows
+
+**Model loading**
+On startup, load:
+- scaler = joblib.load("ctu13_scaler_clean.joblib")
+- xgb = joblib.load("xgb_model.pkl")
+- model_rl = PPO.load("ppo_ids_agent")
+
+Also, load a small test dataset from CSV, for example:
+- `test_flows.csv` containing:
+  - feature columns (same order used in training)
+  - a `Label` column (0 = normal, 1 = attack)
+
+Store the test data in memory (e.g. as a list of dicts or numpy arrays)
+so that the API can randomly pick one flow each time.
+
+**Helper function: combined prediction**
+
+```python
+def predict_with_rl(features):
+    # features: 1D array or list of numeric values
+
+    x = np.array(features, dtype=float).reshape(1, -1)
+    x_scaled = scaler.transform(x)
+
+    # XGBoost probability of attack
+    score = float(xgb.predict_proba(x_scaled)[0, 1])  # 0..1
+    label = int(xgb.predict(x_scaled)[0])             # 0 or 1
+
+    # state for RL = [risk_score]
+    state = np.array([score], dtype=np.float32)
+    action, _ = model_rl.predict(state, deterministic=True)
+    action = int(action)   # 0 = Ignore, 1 = Block
+
+    return score, label, action

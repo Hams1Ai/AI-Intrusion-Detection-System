@@ -1,0 +1,266 @@
+
+Reward logic (2-action system)
+
+Actions:
+
+0 = Ignore
+
+1 = Block
+
+Reward rules:
+
+If action == 0 (Ignore):
+
+if true_label == 0 → reward = +10 (correctly ignored normal traffic)
+
+if true_label == 1 → reward = -10 (ignored an attack, security breach)
+
+If action == 1 (Block):
+
+if true_label == 1 → reward = +8 (correctly blocked an attack)
+
+if true_label == 0 → reward = -5 (blocked normal traffic, user impact)
+
+Flask routes
+
+GET /
+
+Returns the main HTML page (Jinja template index.html).
+
+GET /api/next-flow
+
+Randomly select one row from test_flows.
+
+Extract:
+
+flow_id (e.g. row index)
+
+features (list of numbers)
+
+true_label (0 or 1)
+
+Call predict_with_rl(features) to get:
+
+risk_score
+
+xgb_label
+
+rl_action
+
+Return JSON:
+
+json
+نسخ الكود
+{
+  "flow_id": 12345,
+  "risk_score": 0.82,
+  "xgb_label": "ATTACK",
+  "xgb_label_raw": 1,
+  "rl_action": 1,        // 0 = Ignore, 1 = Block
+  "true_label": 1
+}
+POST /api/submit-decision
+
+Request JSON fields:
+
+flow_id
+
+user_action (0 or 1)
+
+true_label (0 or 1)
+
+Compute reward based on the reward rules.
+
+Maintain session statistics on the server side (global variables or simple in-memory store):
+
+total_score
+
+total_flows
+
+correct_decisions
+
+Update stats after each request.
+
+Return JSON:
+
+json
+نسخ الكود
+{
+  "reward": -5,
+  "total_score": 21,
+  "total_flows": 4,
+  "correct": 3,
+  "accuracy": 0.75        // 0..1, frontend will show 75%
+}
+2) Frontend design (index.html + CSS + JS)
+Create a modern cyber / neon themed UI similar to a hacking dashboard.
+
+Main layout sections:
+
+Header
+
+Title: "AI INTRUSION DETECTION SYSTEM"
+
+A small status pill on the right: "ONLINE" with a green glow.
+
+RL Interactive Analyzer panel
+
+Shows:
+
+FLOW ID (e.g. "Flow #57397")
+
+XGBoost Classification badge:
+
+Green "NORMAL" when xgb_label = 0
+
+Red "ATTACK" when xgb_label = 1
+
+Risk Score on the right (0.00–1.00) in yellow.
+
+Question + Actions
+
+Text: "What action should the SOC analyst take?"
+
+Two large buttons:
+
+IGNORE (blue, shield icon)
+
+BLOCK (red, cross icon)
+
+Buttons send POST to /api/submit-decision with user_action = 0 or 1.
+
+Decision feedback panel
+
+After the user chooses an action, show one of two cards:
+
+a) Correct Decision (green title):
+
+Example text when user ignored normal traffic:
+"Perfect! You correctly ignored normal traffic. +10 points!"
+
+Show:
+
+"Your action: Ignore"
+
+"RL agent recommends: Block" or "Ignore"
+
+A small badge:
+
+"Matches Agent" (green) when they are the same
+
+"Different from Agent" (yellow) when they differ
+
+b) Incorrect Decision (red title):
+
+Example text when user blocked normal traffic:
+"Incorrect. You blocked normal traffic. -5 points for disrupting users."
+
+Or when they ignored an attack:
+"Wrong! You ignored an attack. -10 points – security breach!"
+
+Also show "Your action" vs "RL agent recommends" with the badge.
+
+Session Stats section
+
+Title: "★ SESSION STATS"
+
+A 2x2 grid of glowing stat cards:
+
+TOTAL SCORE: big number (can be negative)
+
+CORRECT: number of correct decisions
+
+TOTAL FLOWS: how many flows played this session
+
+ACCURACY: percentage = correct / total_flows * 100, rounded to integer
+
+Example layout:
+
+TOTAL SCORE : 8
+CORRECT : 2
+TOTAL FLOWS : 3
+ACCURACY : 67%
+
+Update this section live after each decision using the JSON from /api/submit-decision.
+
+Load New Flow button
+
+Big glowing button under the action buttons:
+
+Text: "LOAD NEW FLOW"
+
+On click:
+
+Call /api/next-flow
+
+Update flow id, XGBoost label, risk score
+
+Reset the feedback panel until the user makes a new decision.
+
+Styling details
+
+Dark background (#02040a or similar).
+
+Gradient neon borders (cyan, purple, blue).
+
+Use a futuristic font (like "Orbitron" or similar Google Font).
+
+Buttons with hover effects and smooth transitions.
+
+Panels with slight blur and box-shadow to feel like a sci-fi dashboard.
+
+JavaScript behavior
+
+On page load:
+
+Automatically call /api/next-flow to show the first flow.
+
+When user clicks IGNORE or BLOCK:
+
+Disable both buttons briefly to prevent double-click.
+
+Send POST to /api/submit-decision.
+
+Show feedback panel with correct/incorrect message and reward.
+
+Update Session Stats numbers and accuracy.
+
+3) Project structure
+Please create the following structure:
+
+main.py → Flask backend
+
+templates/index.html → main HTML page
+
+static/style.css → all styles
+
+static/app.js → frontend logic for API calls and UI updates
+
+xgb_model.pkl
+
+ctu13_scaler_clean.joblib
+
+ppo_ids_agent (folder or file as needed)
+
+test_flows.csv
+
+After implementing everything, configure Replit so that:
+
+The Flask app runs on the default port.
+
+The webview shows the full interactive AI Intrusion Detection System game.
+
+The final result should look like a professional, cyberpunk-style security dashboard where the user can:
+
+see the model’s classification and risk score,
+
+see the RL recommendation,
+
+choose Ignore or Block,
+
+get rewarded or penalized,
+
+and track their performance in the Session Stats section.
+
+markdown
+نسخ الكود
