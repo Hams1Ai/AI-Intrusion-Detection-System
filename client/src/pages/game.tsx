@@ -1,9 +1,8 @@
-import { useState, useCallback, useEffect, useRef } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useState, useCallback, useRef } from "react";
+import { useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
 import { 
   Shield, 
@@ -18,18 +17,15 @@ import {
   Star,
   Clock,
   Gauge,
-  Timer,
   Network,
   Server,
   Globe,
   Package,
   Wifi,
-  AlertOctagon,
-  Info
+  AlertOctagon
 } from "lucide-react";
-import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { FlowData, DecisionResult, Difficulty } from "@shared/schema";
-import { difficultyMultipliers } from "@shared/schema";
+import { apiRequest } from "@/lib/queryClient";
+import type { FlowData, DecisionResult } from "@shared/schema";
 
 function Header() {
   return (
@@ -54,96 +50,6 @@ function Header() {
         </Badge>
       </div>
     </header>
-  );
-}
-
-interface DifficultySelectorProps {
-  difficulty: Difficulty;
-  onDifficultyChange: (difficulty: Difficulty) => void;
-  disabled: boolean;
-}
-
-function DifficultySelector({ difficulty, onDifficultyChange, disabled }: DifficultySelectorProps) {
-  const difficultyInfo: Record<Difficulty, { label: string; color: string; description: string }> = {
-    easy: { label: "EASY", color: "text-neon-green", description: "0.5x penalties, no timer" },
-    normal: { label: "NORMAL", color: "text-neon-cyan", description: "1x rewards/penalties, no timer" },
-    hard: { label: "HARD", color: "text-neon-yellow", description: "1.5x multiplier, 30s timer" },
-    expert: { label: "EXPERT", color: "text-neon-red", description: "2x multiplier, 15s timer" },
-  };
-
-  return (
-    <Card className="neon-border-gradient">
-      <CardContent className="p-4">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <Gauge className="w-5 h-5 text-neon-purple" />
-            <div>
-              <p className="text-sm font-medium uppercase tracking-wide">Difficulty Level</p>
-              <p className="text-xs text-muted-foreground">{difficultyInfo[difficulty].description}</p>
-            </div>
-          </div>
-          <Select
-            value={difficulty}
-            onValueChange={(value) => onDifficultyChange(value as Difficulty)}
-            disabled={disabled}
-          >
-            <SelectTrigger className="w-40" data-testid="select-difficulty">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="easy" data-testid="select-difficulty-easy">
-                <span className="text-neon-green font-semibold">EASY</span>
-              </SelectItem>
-              <SelectItem value="normal" data-testid="select-difficulty-normal">
-                <span className="text-neon-cyan font-semibold">NORMAL</span>
-              </SelectItem>
-              <SelectItem value="hard" data-testid="select-difficulty-hard">
-                <span className="text-neon-yellow font-semibold">HARD</span>
-              </SelectItem>
-              <SelectItem value="expert" data-testid="select-difficulty-expert">
-                <span className="text-neon-red font-semibold">EXPERT</span>
-              </SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-interface TimerProps {
-  timeLimit: number | null;
-  timeRemaining: number;
-  isActive: boolean;
-}
-
-function TimerDisplay({ timeLimit, timeRemaining, isActive }: TimerProps) {
-  if (!timeLimit || !isActive) return null;
-
-  const progress = (timeRemaining / timeLimit) * 100;
-  const isLow = timeRemaining <= 5;
-  const isExpired = timeRemaining <= 0;
-
-  return (
-    <Card className={`neon-border-gradient ${isLow ? "neon-glow-red" : "neon-glow-yellow"}`}>
-      <CardContent className="p-4">
-        <div className="flex items-center gap-4">
-          <Timer className={`w-6 h-6 ${isLow ? "text-neon-red animate-pulse" : "text-neon-yellow"}`} />
-          <div className="flex-1 space-y-2">
-            <div className="flex justify-between items-center">
-              <p className="text-sm uppercase tracking-wide font-medium">Time Pressure</p>
-              <span className={`text-2xl font-bold ${isLow ? "neon-text-red" : "neon-text-yellow"}`} data-testid="text-timer">
-                {isExpired ? "TIME'S UP!" : `${timeRemaining}s`}
-              </span>
-            </div>
-            <Progress 
-              value={progress} 
-              className={`h-2 ${isLow ? "[&>div]:bg-neon-red" : "[&>div]:bg-neon-yellow"}`}
-            />
-          </div>
-        </div>
-      </CardContent>
-    </Card>
   );
 }
 
@@ -423,11 +329,10 @@ interface ActionButtonsProps {
   isSubmitting: boolean;
   hasFlow: boolean;
   hasResult: boolean;
-  timerExpired: boolean;
 }
 
-function ActionButtons({ onAction, isSubmitting, hasFlow, hasResult, timerExpired }: ActionButtonsProps) {
-  const disabled = isSubmitting || !hasFlow || hasResult || timerExpired;
+function ActionButtons({ onAction, isSubmitting, hasFlow, hasResult }: ActionButtonsProps) {
+  const disabled = isSubmitting || !hasFlow || hasResult;
   
   return (
     <div className="space-y-4">
@@ -624,50 +529,22 @@ export default function GamePage() {
     total_flows: 0,
     accuracy: 0,
   });
-  const [difficulty, setDifficulty] = useState<Difficulty>("normal");
-  const [timeRemaining, setTimeRemaining] = useState<number>(0);
-  const [timerActive, setTimerActive] = useState(false);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
-  const hasAutoSubmittedRef = useRef(false);
   const isSubmittingRef = useRef(false);
 
-  const { isLoading: isLoadingFlow, refetch: refetchFlow } = useQuery<FlowData>({
-    queryKey: ["/api/next-flow"],
-    enabled: false,
-  });
-
-  const { data: serverDifficulty } = useQuery<{ difficulty: Difficulty }>({
-    queryKey: ["/api/difficulty"],
-    refetchOnWindowFocus: false,
-  });
-
-  useEffect(() => {
-    if (serverDifficulty?.difficulty && serverDifficulty.difficulty !== difficulty) {
-      setDifficulty(serverDifficulty.difficulty);
-    }
-  }, [serverDifficulty, difficulty]);
-
-  const difficultyMutation = useMutation({
-    mutationFn: async (newDifficulty: Difficulty) => {
-      const response = await apiRequest("POST", "/api/difficulty", { difficulty: newDifficulty });
-      return response.json();
+  const flowMutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch("/api/next-flow");
+      if (!response.ok) {
+        throw new Error("Failed to fetch flow");
+      }
+      return response.json() as Promise<FlowData>;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/difficulty"] });
+    onSuccess: (data) => {
+      setCurrentFlow(data);
     },
   });
 
-  const handleDifficultyChange = useCallback((newDifficulty: Difficulty) => {
-    setDifficulty(newDifficulty);
-    difficultyMutation.mutate(newDifficulty);
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-    }
-    setTimerActive(false);
-    setTimeRemaining(0);
-  }, [difficultyMutation]);
-
-  const loadNewFlow = useCallback(async () => {
+  const loadNewFlow = useCallback(() => {
     if (isSubmittingRef.current) {
       return;
     }
@@ -675,22 +552,8 @@ export default function GamePage() {
     setLastUserAction(null);
     setLastFlowTrueLabel(null);
     setLastFlowRlAction(null);
-    hasAutoSubmittedRef.current = false;
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-    }
-    setTimerActive(false);
-    
-    const result = await refetchFlow();
-    if (result.data) {
-      setCurrentFlow(result.data);
-      const timeLimit = difficultyMultipliers[difficulty].timeLimit;
-      if (timeLimit) {
-        setTimeRemaining(timeLimit);
-        setTimerActive(true);
-      }
-    }
-  }, [refetchFlow, difficulty]);
+    flowMutation.mutate();
+  }, [flowMutation]);
 
   const submitMutation = useMutation({
     mutationFn: async (userAction: number) => {
@@ -704,10 +567,6 @@ export default function GamePage() {
     },
     onSuccess: (data, userAction) => {
       isSubmittingRef.current = false;
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-      }
-      setTimerActive(false);
       setLastResult(data);
       setLastUserAction(userAction);
       setStats({
@@ -730,72 +589,24 @@ export default function GamePage() {
     submitMutation.mutate(action);
   }, [submitMutation, currentFlow]);
 
-  useEffect(() => {
-    if (timerActive && timeRemaining > 0) {
-      timerRef.current = setInterval(() => {
-        setTimeRemaining((prev) => {
-          if (prev <= 1) {
-            if (timerRef.current) {
-              clearInterval(timerRef.current);
-            }
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    }
-    return () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-      }
-    };
-  }, [timerActive]);
-
-  useEffect(() => {
-    if (timerActive && timeRemaining === 0 && currentFlow && !lastResult && !hasAutoSubmittedRef.current && !submitMutation.isPending) {
-      hasAutoSubmittedRef.current = true;
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-      }
-      setTimerActive(false);
-      setLastFlowTrueLabel(currentFlow.true_label);
-      setLastFlowRlAction(currentFlow.rl_action);
-      const randomAction = Math.round(Math.random());
-      submitMutation.mutate(randomAction);
-    }
-  }, [timeRemaining, timerActive, currentFlow, lastResult, submitMutation]);
-
   return (
     <div className="min-h-screen bg-background scanline-overlay">
       <Header />
       
       <main className="max-w-4xl mx-auto px-4 py-8 space-y-8">
-        <DifficultySelector 
-          difficulty={difficulty}
-          onDifficultyChange={handleDifficultyChange}
-          disabled={isLoadingFlow || submitMutation.isPending || difficultyMutation.isPending}
-        />
-        
-        <TimerDisplay 
-          timeLimit={difficultyMultipliers[difficulty].timeLimit}
-          timeRemaining={timeRemaining}
-          isActive={timerActive && !lastResult}
-        />
-        
-        <FlowAnalyzer flowData={currentFlow} isLoading={isLoadingFlow} />
+        <FlowAnalyzer flowData={currentFlow} isLoading={flowMutation.isPending} />
         
         <ActionButtons 
           onAction={handleAction}
           isSubmitting={submitMutation.isPending}
           hasFlow={!!currentFlow}
           hasResult={!!lastResult}
-          timerExpired={timerActive && timeRemaining === 0}
         />
         
         <Button
           size="lg"
           onClick={loadNewFlow}
-          disabled={isLoadingFlow || submitMutation.isPending}
+          disabled={flowMutation.isPending || submitMutation.isPending}
           className={`
             w-full h-14 text-lg font-bold uppercase tracking-wide
             bg-gradient-to-r from-neon-cyan/20 via-neon-purple/20 to-neon-blue/20
@@ -807,7 +618,7 @@ export default function GamePage() {
           `}
           data-testid="button-load-flow"
         >
-          {isLoadingFlow ? (
+          {flowMutation.isPending ? (
             <>
               <RefreshCw className="w-5 h-5 mr-2 animate-spin" />
               Loading...
