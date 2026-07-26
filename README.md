@@ -15,6 +15,7 @@ This project combines Machine Learning and Reinforcement Learning to detect netw
 ## Technologies
 - Python
 - XGBoost
+- RL
 - Scikit-learn
 - Stable-Baselines3
 - HTML
@@ -24,4 +25,4 @@ This project combines Machine Learning and Reinforcement Learning to detect netw
 
 
 ## Author
-Hams Alqoni
+Hams 
