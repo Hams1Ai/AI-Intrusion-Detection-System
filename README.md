@@ -21,9 +21,7 @@ This project combines Machine Learning and Reinforcement Learning to detect netw
 - CSS
 - JavaScript
 
-## Project Preview
 
-> Add screenshots of the dashboard here.
 
 ## Author
 Hams Alqoni
