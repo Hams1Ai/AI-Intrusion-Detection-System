@@ -21,7 +21,11 @@ This project combines Machine Learning and Reinforcement Learning to detect netw
 - HTML
 - CSS
 - JavaScript
+## Live Demo
 
+Try the deployed application here:
+
+🔗 [AI Intrusion Detection System - Live Demo](https://ai-intrusion-detection-system-xisz.onrender.com)
 
 
 ## Author
