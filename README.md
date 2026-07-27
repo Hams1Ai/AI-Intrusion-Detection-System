@@ -30,7 +30,6 @@ Try the deployed application here:
 
 ### [Open AI Intrusion Detection System](https://ai-intrusion-detection-system-xisz.onrender.com)
 
-> The application is hosted on Render’s free plan, so the first load may take a few seconds after inactivity.
 
 ---
 
