@@ -1,17 +1,25 @@
 import { db } from "./db";
-import { gameSessions, decisions, difficultyMultipliers } from "@shared/schema";
-import type { FlowData, DecisionResult, SessionStats, Difficulty } from "@shared/schema";
+import {
+  gameSessions,
+  decisions,
+  difficultyMultipliers,
+} from "@shared/schema";
+import type {
+  FlowData,
+  DecisionResult,
+  SessionStats,
+  Difficulty,
+} from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { execSync } from "child_process";
 import path from "path";
-import { fileURLToPath } from "url";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 export interface IStorage {
   getNextFlow(): Promise<FlowData>;
-  submitDecision(flowId: number, userAction: number): Promise<DecisionResult>;
+  submitDecision(
+    flowId: number,
+    userAction: number
+  ): Promise<DecisionResult>;
   getSessionStats(): Promise<SessionStats>;
   resetSession(): Promise<void>;
   setDifficulty(difficulty: Difficulty): Promise<void>;
@@ -19,7 +27,11 @@ export interface IStorage {
 }
 
 function generateRandomIp(): string {
-  return `${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`;
+  return `${Math.floor(Math.random() * 255)}.${Math.floor(
+    Math.random() * 255
+  )}.${Math.floor(Math.random() * 255)}.${Math.floor(
+    Math.random() * 255
+  )}`;
 }
 
 function generateSimulatedFlow(): FlowData {
@@ -27,17 +39,24 @@ function generateSimulatedFlow(): FlowData {
   const trueLabel = Math.random() < 0.4 ? 1 : 0;
 
   let riskScore: number;
+
   if (trueLabel === 1) {
     riskScore = 0.5 + Math.random() * 0.45;
   } else {
     riskScore = Math.random() * 0.5;
   }
+
   riskScore = Math.round(riskScore * 100) / 100;
 
   const xgbLabelRaw = riskScore > 0.5 ? 1 : 0;
-  const xgbLabel = xgbLabelRaw === 1 ? ("ATTACK" as const) : ("NORMAL" as const);
+
+  const xgbLabel =
+    xgbLabelRaw === 1
+      ? ("ATTACK" as const)
+      : ("NORMAL" as const);
 
   let rlAction: number;
+
   if (riskScore > 0.7) {
     rlAction = 1;
   } else if (riskScore < 0.3) {
@@ -46,17 +65,50 @@ function generateSimulatedFlow(): FlowData {
     rlAction = Math.random() < 0.6 ? 1 : 0;
   }
 
-  const protocols = ["TCP", "UDP", "ICMP", "HTTP", "HTTPS", "SSH", "DNS"];
-  const protocol = protocols[Math.floor(Math.random() * protocols.length)];
+  const protocols = [
+    "TCP",
+    "UDP",
+    "ICMP",
+    "HTTP",
+    "HTTPS",
+    "SSH",
+    "DNS",
+  ];
 
-  const commonPorts = [22, 80, 443, 8080, 3306, 5432, 6379, 27017];
-  const suspiciousPorts = [4444, 5555, 6666, 31337, 12345];
+  const protocol =
+    protocols[Math.floor(Math.random() * protocols.length)];
+
+  const commonPorts = [
+    22,
+    80,
+    443,
+    8080,
+    3306,
+    5432,
+    6379,
+    27017,
+  ];
+
+  const suspiciousPorts = [
+    4444,
+    5555,
+    6666,
+    31337,
+    12345,
+  ];
 
   let dstPort: number;
+
   if (trueLabel === 1 && Math.random() < 0.3) {
-    dstPort = suspiciousPorts[Math.floor(Math.random() * suspiciousPorts.length)];
+    dstPort =
+      suspiciousPorts[
+        Math.floor(Math.random() * suspiciousPorts.length)
+      ];
   } else {
-    dstPort = commonPorts[Math.floor(Math.random() * commonPorts.length)];
+    dstPort =
+      commonPorts[
+        Math.floor(Math.random() * commonPorts.length)
+      ];
   }
 
   return {
@@ -70,29 +122,47 @@ function generateSimulatedFlow(): FlowData {
     dst_ip: generateRandomIp(),
     src_port: Math.floor(Math.random() * 60000) + 1024,
     dst_port: dstPort,
-    protocol: protocol,
+    protocol,
     packet_size: Math.floor(Math.random() * 1500) + 64,
-    duration: Math.round((Math.random() * 120) * 100) / 100,
+    duration: Math.round(Math.random() * 120 * 100) / 100,
     using_real_ppo: false,
   };
 }
 
 function getFlowFromMLPython(): FlowData | null {
   try {
-    const scriptPath = path.join(__dirname, 'ml_predict.py');
-    const output = execSync(`python3 ${scriptPath}`, {
-      encoding: 'utf-8',
-      timeout: 10000,
-      cwd: __dirname,
-    });
-    
+    const serverDirectory = path.join(
+      process.cwd(),
+      "server"
+    );
+
+    const scriptPath = path.join(
+      serverDirectory,
+      "ml_predict.py"
+    );
+
+    const output = execSync(
+      `python3 "${scriptPath}"`,
+      {
+        encoding: "utf-8",
+        timeout: 10000,
+        cwd: serverDirectory,
+      }
+    );
+
     const data = JSON.parse(output.trim());
-    console.log("ML prediction successful, risk_score:", data.risk_score);
-    
+
+    console.log(
+      "ML prediction successful, risk_score:",
+      data.risk_score
+    );
+
     return {
       flow_id: data.flow_id,
       risk_score: data.risk_score,
-      xgb_label: data.xgb_label as "ATTACK" | "NORMAL",
+      xgb_label: data.xgb_label as
+        | "ATTACK"
+        | "NORMAL",
       xgb_label_raw: data.xgb_label_raw,
       rl_action: data.rl_action,
       true_label: data.true_label,
@@ -103,93 +173,144 @@ function getFlowFromMLPython(): FlowData | null {
       protocol: data.protocol,
       packet_size: data.packet_size,
       duration: data.duration,
-      using_real_ppo: data.using_real_ppo ?? false,
+      using_real_ppo:
+        data.using_real_ppo ?? false,
     };
   } catch (error) {
-    console.log("ML prediction failed, falling back to simulation:", error);
+    console.log(
+      "ML prediction failed, falling back to simulation:",
+      error
+    );
+
     return null;
   }
 }
 
-function calculateReward(userAction: number, trueLabel: number, difficulty: Difficulty): number {
-  const multipliers = difficultyMultipliers[difficulty];
+function calculateReward(
+  userAction: number,
+  trueLabel: number,
+  difficulty: Difficulty
+): number {
+  const multipliers =
+    difficultyMultipliers[difficulty];
+
   let baseReward: number;
 
-  // Reward logic based on TRUE LABEL (actual traffic type):
-  // - label == normal (0) AND action == ignore (0) → +10
-  // - label == attack (1) AND action == block (1) → +8
-  // - label == normal (0) AND action == block (1) → -5
-  // - label == attack (1) AND action == ignore (0) → -10
-  if (trueLabel === 0) {  // NORMAL traffic
+  if (trueLabel === 0) {
     if (userAction === 0) {
-      baseReward = 10;   // Correct: ignored normal traffic
+      baseReward = 10;
     } else {
-      baseReward = -5;   // Incorrect: blocked normal traffic (false positive)
+      baseReward = -5;
     }
-  } else {  // ATTACK traffic (trueLabel === 1)
+  } else {
     if (userAction === 1) {
-      baseReward = 8;    // Correct: blocked attack
+      baseReward = 8;
     } else {
-      baseReward = -10;  // Incorrect: ignored attack (security breach)
+      baseReward = -10;
     }
   }
 
   if (baseReward > 0) {
-    return Math.round(baseReward * multipliers.reward);
-  } else {
-    return Math.round(baseReward * multipliers.penalty);
+    return Math.round(
+      baseReward * multipliers.reward
+    );
   }
+
+  return Math.round(
+    baseReward * multipliers.penalty
+  );
 }
 
-export class DatabaseStorage implements IStorage {
-  private currentSessionId: number | null = null;
-  private currentDifficulty: Difficulty = "normal";
-  private currentFlow: FlowData | null = null;
-  private flowCache: Map<number, FlowData> = new Map();
-  private static readonly MAX_CACHED_FLOWS = 50;
+export class DatabaseStorage
+  implements IStorage
+{
+  private currentSessionId:
+    | number
+    | null = null;
+
+  private currentDifficulty:
+    Difficulty = "normal";
+
+  private currentFlow:
+    | FlowData
+    | null = null;
+
+  private flowCache:
+    Map<number, FlowData> = new Map();
+
+  private static readonly MAX_CACHED_FLOWS =
+    50;
 
   private async ensureSession(): Promise<number> {
     if (this.currentSessionId === null) {
       const [session] = await db
         .insert(gameSessions)
-        .values({ difficulty: this.currentDifficulty })
+        .values({
+          difficulty:
+            this.currentDifficulty,
+        })
         .returning();
+
       this.currentSessionId = session.id;
     }
+
     return this.currentSessionId;
   }
 
   async getNextFlow(): Promise<FlowData> {
-    const mlFlow = getFlowFromMLPython();
-    this.currentFlow = mlFlow ?? generateSimulatedFlow();
-    
-    // Cache the flow by ID for later lookup during submission
-    this.flowCache.set(this.currentFlow.flow_id, this.currentFlow);
-    
-    // Clean up old cached flows to prevent memory leaks
-    if (this.flowCache.size > DatabaseStorage.MAX_CACHED_FLOWS) {
-      const keysToDelete = Array.from(this.flowCache.keys()).slice(0, 10);
-      keysToDelete.forEach(key => this.flowCache.delete(key));
+    const mlFlow =
+      getFlowFromMLPython();
+
+    this.currentFlow =
+      mlFlow ?? generateSimulatedFlow();
+
+    this.flowCache.set(
+      this.currentFlow.flow_id,
+      this.currentFlow
+    );
+
+    if (
+      this.flowCache.size >
+      DatabaseStorage.MAX_CACHED_FLOWS
+    ) {
+      const keysToDelete = Array.from(
+        this.flowCache.keys()
+      ).slice(0, 10);
+
+      keysToDelete.forEach((key) =>
+        this.flowCache.delete(key)
+      );
     }
-    
+
     return this.currentFlow;
   }
 
-  async submitDecision(flowId: number, userAction: number): Promise<DecisionResult> {
-    // Look up the flow from cache by ID - this allows handling timing issues
-    const flow = this.flowCache.get(flowId);
-    
+  async submitDecision(
+    flowId: number,
+    userAction: number
+  ): Promise<DecisionResult> {
+    const flow =
+      this.flowCache.get(flowId);
+
     if (!flow) {
-      throw new Error("Flow not found - the flow may have expired or was never loaded");
+      throw new Error(
+        "Flow not found - the flow may have expired or was never loaded"
+      );
     }
 
-    const sessionId = await this.ensureSession();
+    const sessionId =
+      await this.ensureSession();
+
     const trueLabel = flow.true_label;
-    const reward = calculateReward(userAction, trueLabel, this.currentDifficulty);
-    
-    // isCorrect: did the user make the correct decision based on true label?
-    // Correct means: IGNORE normal traffic OR BLOCK attack traffic
-    const isCorrect = userAction === trueLabel ? 1 : 0;
+
+    const reward = calculateReward(
+      userAction,
+      trueLabel,
+      this.currentDifficulty
+    );
+
+    const isCorrect =
+      userAction === trueLabel ? 1 : 0;
 
     await db.insert(decisions).values({
       sessionId,
@@ -210,18 +331,28 @@ export class DatabaseStorage implements IStorage {
       duration: flow.duration,
     });
 
-    // Remove the flow from cache after submission to prevent replay
     this.flowCache.delete(flowId);
 
     const [session] = await db
       .select()
       .from(gameSessions)
-      .where(eq(gameSessions.id, sessionId));
+      .where(
+        eq(gameSessions.id, sessionId)
+      );
 
-    const newTotalScore = session.totalScore + reward;
-    const newTotalFlows = session.totalFlows + 1;
-    const newCorrect = session.correct + isCorrect;
-    const newAccuracy = newTotalFlows > 0 ? newCorrect / newTotalFlows : 0;
+    const newTotalScore =
+      session.totalScore + reward;
+
+    const newTotalFlows =
+      session.totalFlows + 1;
+
+    const newCorrect =
+      session.correct + isCorrect;
+
+    const newAccuracy =
+      newTotalFlows > 0
+        ? newCorrect / newTotalFlows
+        : 0;
 
     await db
       .update(gameSessions)
@@ -232,7 +363,9 @@ export class DatabaseStorage implements IStorage {
         accuracy: newAccuracy,
         updatedAt: new Date(),
       })
-      .where(eq(gameSessions.id, sessionId));
+      .where(
+        eq(gameSessions.id, sessionId)
+      );
 
     return {
       reward,
@@ -256,7 +389,12 @@ export class DatabaseStorage implements IStorage {
     const [session] = await db
       .select()
       .from(gameSessions)
-      .where(eq(gameSessions.id, this.currentSessionId));
+      .where(
+        eq(
+          gameSessions.id,
+          this.currentSessionId
+        )
+      );
 
     if (!session) {
       return {
@@ -282,13 +420,21 @@ export class DatabaseStorage implements IStorage {
     this.flowCache.clear();
   }
 
-  async setDifficulty(difficulty: Difficulty): Promise<void> {
+  async setDifficulty(
+    difficulty: Difficulty
+  ): Promise<void> {
     this.currentDifficulty = difficulty;
+
     if (this.currentSessionId !== null) {
       await db
         .update(gameSessions)
         .set({ difficulty })
-        .where(eq(gameSessions.id, this.currentSessionId));
+        .where(
+          eq(
+            gameSessions.id,
+            this.currentSessionId
+          )
+        );
     }
   }
 
@@ -297,4 +443,5 @@ export class DatabaseStorage implements IStorage {
   }
 }
 
-export const storage = new DatabaseStorage();
+export const storage =
+  new DatabaseStorage();
